@@ -2,29 +2,37 @@ import threading
 import numpy as np
 import torch
 from queue import Queue
+from collections import defaultdict
 
 class Server:
-    def __init__(self, model, num_clients, total_rounds, E_max, V, global_lr=0.01, communication_latency=1.0):
-        self.model = model
+    def __init__(self, model, num_clients, total_rounds, E_max, V, 
+                 global_lr=0.01, communication_latency=1.0, device="cpu"):
+        self.model = model.to(device)
         self.num_clients = num_clients
         self.total_rounds = total_rounds
         self.E_max = E_max
         self.V = V
         self.global_lr = global_lr
         self.communication_latency = communication_latency
+        self.device = device
 
+        # Client management
         self.clients = []
+        self.client_staleness = defaultdict(int)
         self.selected_clients = []
         self.ready_clients = set()
-        self.client_gradients = {}
+        
+        # Gradient aggregation storage
+        self.client_signals = {}
         self.client_energies = {}
-        self.global_model = model.state_dict()
+        
+        # Synchronization
         self.lock = threading.Lock()
         self.round_complete = threading.Event()
         self.round = 0
 
-        # Lyapunov virtual energy queue
-        self.energy_queue = 0
+        # Lyapunov optimization
+        self.energy_queue = 0.0
         self.energy_per_round = E_max / total_rounds
 
         # Metrics
@@ -34,97 +42,150 @@ class Server:
     def register_clients(self, clients):
         self.clients = clients
         for client in clients:
-            client.set_callbacks(self.receive_signal, self.receive_gradient)
+            client.set_callbacks(self.notify_client_completion, self.receive_client_signal)
+        self.client_staleness = {k:0 for k in range(len(clients))}
 
-    def receive_signal(self, client_id):
+    def notify_client_completion(self, client_id):
         with self.lock:
             self.ready_clients.add(client_id)
-            if all(cid in self.ready_clients for cid in self.selected_clients):
+            if len(self.ready_clients) == len(self.selected_clients):
                 self.round_complete.set()
 
-    def receive_gradient(self, client_id, gradient, power, gamma):
+    def receive_client_signal(self, client_id, signal, energy):
         with self.lock:
-            self.client_gradients[client_id] = gradient
-            energy = power * torch.norm(gradient).item() ** 2  # OTA transmission energy
+            self.client_signals[client_id] = signal.to(self.device)
             self.client_energies[client_id] = energy
-            self.clients[client_id].power = power
-            self.clients[client_id].gamma = gamma
 
-    def select_clients_dpp(self):
-        N_t = [k for k in range(self.num_clients)]
-        candidate_set = []
-        J_min = float("inf")
-        selected = []
+    def calculate_gamma(self, client_id):
+        tau = max(self.client_staleness[client_id], 1)
+        return 1.0 / (tau + 1e-6)
 
-        # Sort by estimated local training time
-        N_t_sorted = sorted(N_t, key=lambda k: self.clients[k].estimated_training_time())
-
-        for k in N_t_sorted:
-            candidate_set.append(k)
-            D_t = max([self.clients[i].estimated_training_time() for i in candidate_set])
-            E_t = sum([self.clients[i].estimated_energy() for i in candidate_set])
-            J = self.V * D_t + self.energy_queue * E_t
-
-            if J < J_min:
-                J_min = J
-                selected = list(candidate_set)
-            else:
-                break
-
-        return selected
-
-    def aggregate_gradients(self):
-        total_weight = sum(
-            self.clients[i].power * self.clients[i].gamma for i in self.selected_clients
+    def select_clients(self):
+        candidates = sorted(
+            self.clients,
+            key=lambda c: c.estimated_training_time(),
+            reverse=False
         )
-        aggregated_gradient = None
 
-        for k in self.selected_clients:
-            alpha_k = self.clients[k].power * self.clients[k].gamma / total_weight
-            grad = self.client_gradients[k]
-            if aggregated_gradient is None:
-                aggregated_gradient = {key: alpha_k * val.clone() for key, val in grad.items()}
+        best_set = []
+        min_cost = float('inf')
+        
+        current_set = []
+        for client in candidates:
+            current_set.append(client)
+            
+            # Calculate round duration
+            D_t = max(c.estimated_training_time() for c in current_set) + self.communication_latency
+            
+            # Calculate total energy cost
+            E_t = sum(c.estimated_energy() for c in current_set)
+            
+            # Lyapunov objective function
+            objective = self.V * D_t + self.energy_queue * E_t
+            
+            if objective < min_cost:
+                best_set = current_set.copy()
+                min_cost = objective
             else:
-                for key in aggregated_gradient:
-                    aggregated_gradient[key] += alpha_k * grad[key]
+                break  # Stop when objective starts increasing
+        
+        return [c.client_id for c in best_set]
 
+    def aggregate_signals(self):
+        if not self.selected_clients:
+            return None
+        valid_clients = [cid for cid in self.selected_clients if cid in self.client_signals]
+        if not valid_clients:
+            return None
+
+        # Calculate total effective power (denominator for normalization)
+        total_weight = 0.0
+        for cid in self.selected_clients:
+            client = self.clients[cid]
+            gamma = self.calculate_gamma(cid)
+            total_weight += client.p_k * gamma * torch.norm(client.h_k).item()
+
+        if total_weight < 1e-9:
+            raise ValueError("Aggregation weights too small - check client selection")
+
+        # Aggregate complex signals
+        first_signal = self.client_signals[valid_clients[0]]
+        aggregated = torch.zeros_like(first_signal, device=self.device)
+        for cid in self.selected_clients:
+            client = self.clients[cid]
+            h_k = client.h_k
+            signal = self.client_signals[cid]
+            
+            # Match dimensions if needed
+            if signal.shape != h_k.shape:
+                signal = signal.expand_as(h_k)
+                
+            aggregated += signal * h_k
+
+        # Normalize and convert to real-valued gradient
+        aggregated_gradient = (aggregated / total_weight).real
         return aggregated_gradient
 
     def update_global_model(self, aggregated_gradient):
-        new_state_dict = self.global_model.copy()
-        for key in new_state_dict:
-            new_state_dict[key] -= self.global_lr * aggregated_gradient[key].real  # only use real part
-        self.model.load_state_dict(new_state_dict)
-        self.global_model = new_state_dict
+        if aggregated_gradient is None:
+            return
+
+        current_params = torch.nn.utils.parameters_to_vector(self.model.parameters())
+        updated_params = current_params - self.global_lr * aggregated_gradient
+        torch.nn.utils.vector_to_parameters(updated_params, self.model.parameters())
 
     def update_virtual_queue(self):
-        round_energy = sum(self.client_energies[k] for k in self.selected_clients)
+        round_energy = sum(self.client_energies.values())
         self.energy_queue = max(self.energy_queue + round_energy - self.energy_per_round, 0)
         self.energy_consumption.append(round_energy)
 
+    def update_staleness(self):
+        for cid in range(len(self.clients)):
+            if cid not in self.selected_clients:
+                self.client_staleness[cid] += 1
+            else:
+                self.client_staleness[cid] = 0
+
     def run_round(self, t):
         self.round = t
-        self.client_gradients.clear()
-        self.client_energies.clear()
+        self.selected_clients = self.select_clients()
         self.ready_clients.clear()
+        self.client_signals.clear()
+        self.client_energies.clear()
         self.round_complete.clear()
 
-        self.selected_clients = self.select_clients_dpp()
+        # Notify selected clients
+        for cid in self.selected_clients:
+            staleness = self.client_staleness[cid]
+            self.clients[cid].receive_global_model(self.model, staleness)
 
-        for k in self.selected_clients:
-            self.clients[k].receive_global_model(self.model, self.clients[k].staleness)
+        # Wait for all selected clients to complete
+        self.round_complete.wait(timeout=60.0)  # Add timeout for safety
 
-        self.round_complete.wait()
+        # Process aggregation
+        agg_grad = self.aggregate_signals()
+        if agg_grad is not None:
+            self.update_global_model(agg_grad)
+            self.update_virtual_queue()
+            self.update_staleness()
 
-        agg_grad = self.aggregate_gradients()
-        self.update_global_model(agg_grad)
-        self.update_virtual_queue()
+        print(f"[Round {t}] Selected: {self.selected_clients} | "
+              f"Queue: {self.energy_queue:.2f} | "
+              f"Energy: {sum(self.client_energies.values()):.2f} J")
 
-        print(f"[Server] Round {t} complete. Selected clients: {self.selected_clients}. Energy queue: {self.energy_queue:.2f}")
-
-    def evaluate_global_model(self):
+    def evaluate_model(self, test_loader):
         self.model.eval()
-        return 0.0  # Placeholder for actual evaluation
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for inputs, labels in test_loader:
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                outputs = self.model(inputs)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+        return correct / total
 
-    def report_metrics(self):
-        return self.training_times, self.energy_consumption
+    def shutdown_clients(self):
+        for client in self.clients:
+            client.stop()

@@ -6,7 +6,7 @@ import threading
 import time
 
 class Client(threading.Thread):
-    def __init__(self, client_id, model_fn, dataset, dataloader, device, local_lr=0.01, channel_dim=10):
+    def __init__(self, client_id, model_fn, dataset, dataloader, device, local_lr=0.01):
         super(Client, self).__init__()
         self.client_id = client_id
         self.device = device
@@ -16,106 +16,141 @@ class Client(threading.Thread):
         self.dataloader = dataloader
         self.lock = threading.Lock()
 
+        # Client-specific characteristics
         self.local_lr = local_lr
-        self.f_k = np.random.uniform(1e8, 3e8)  # FLOPS
-        self.p_k = np.random.uniform(0.01, 1.0)  # transmit power
-        self.h_k = torch.randn(channel_dim, dtype=torch.cfloat)  # channel vector
-        self.mu_k = 1e-28  # CPU efficiency constant
+        self.f_k = np.random.uniform(1e8, 3e8)  # Computational capability (FLOPS)
+        self.p_k = np.random.uniform(0.1, 5.0)  # Transmit power (W)
+        self.mu_k = 1e-28  # CPU efficiency coefficient
         self.C = np.random.uniform(5e5, 2e6)  # FLOPs per sample
-
+        
+        # Wireless channel characteristics (match model parameter dimensions)
+        model_params_size = sum(p.numel() for p in self.model.parameters())
+        self.h_k = torch.randn(model_params_size, dtype=torch.cfloat, device=device)
+        
+        # Training state management
         self.staleness = 0
         self.received_model = None
         self.selected = False
         self.grad_ready_event = threading.Event()
-
         self.local_gradient = None
-        self.notify_done_callback = None  # callback to notify server of training completion
-        self.send_gradient_callback = None  # callback to send OTA signal
-        self.alive = True  # control client lifecycle
+        
+        # Callbacks and lifecycle management
+        self.notify_done_callback = None
+        self.send_gradient_callback = None
+        self.alive = True
 
     def receive_global_model(self, global_model, staleness):
-        self.staleness = staleness
-        self.received_model = global_model.to(self.device)
-        self.model.load_state_dict(global_model.state_dict())
-        self.selected = True
+        """Update client with fresh global model and reset training state"""
+        with self.lock:
+            self.staleness = staleness
+            self.received_model = global_model.to(self.device)
+            self.model.load_state_dict(global_model.state_dict())
+            self.selected = True
 
     def estimated_training_time(self):
+        """Calculate remaining local computation time"""
         return (self.C * len(self.dataloader.dataset)) / self.f_k
 
     def estimated_energy(self):
-        comp_energy = self.mu_k * (self.f_k ** 2) * self.C * len(self.dataloader.dataset)
-        comm_energy = self.p_k  # Simplified, actual comm energy depends on ||s_k||²
-        return comp_energy + comm_energy
+        """Calculate estimated total energy consumption"""
+        with self.lock:
+            comp_energy = self.mu_k * (self.f_k ** 2) * self.C * len(self.dataset)
+            
+            # Staleness-aware communication energy estimate
+            tau = max(self.staleness, 1)  # Prevent division by zero
+            gamma = 1.0 / (tau + 1e-6)
+            comm_energy = (self.p_k ** 2) * (gamma ** 2) * torch.norm(self.h_k).item()
+            
+            return comp_energy + comm_energy
 
     def run(self):
+        """Main client execution loop"""
         while self.alive:
             if self.selected and self.received_model is not None:
-                self.local_training()
+                self._perform_local_training()
+                
+                # Notify server training is complete
                 if self.notify_done_callback:
                     self.notify_done_callback(self.client_id)
-                self.grad_ready_event.wait()  # wait until server signals OTA
+                
+                # Wait for server's OTA transmission signal
+                self.grad_ready_event.wait()
                 self.grad_ready_event.clear()
-                self.transmit_gradient()
+                
+                self._transmit_gradient()
                 self.selected = False
                 self.staleness = 0
             else:
-                self.local_training(step_only=True)
-                self.staleness += 1
+                # Idle state - increment staleness counter
                 time.sleep(0.1)
+                self.staleness += 1
 
-    def local_training(self, E=5, step_only=False):
+    def _perform_local_training(self, E=5):
+        """Execute local SGD with staleness-aware initialization"""
         optimizer = optim.SGD(self.model.parameters(), lr=self.local_lr)
         self.model.train()
 
-        data_iter = iter(self.dataloader)
+        # Store initial parameters for gradient calculation
+        with self.lock:
+            initial_params = torch.nn.utils.parameters_to_vector(
+                self.received_model.parameters()
+            ).detach().clone()
+
+        # Local training loop
         for _ in range(E):
-            try:
-                x, y = next(data_iter)
-            except StopIteration:
-                break
-            x, y = x.to(self.device), y.to(self.device)
-            optimizer.zero_grad()
-            output = self.model(x)
-            loss = nn.CrossEntropyLoss()(output, y)
-            loss.backward()
-            optimizer.step()
+            for x, y in self.dataloader:
+                x, y = x.to(self.device), y.to(self.device)
+                optimizer.zero_grad()
+                output = self.model(x)
+                loss = nn.CrossEntropyLoss()(output, y)
+                loss.backward()
+                optimizer.step()
 
-        if not step_only and self.received_model:
-            new_params = torch.nn.utils.parameters_to_vector(self.model.parameters())
-            old_params = torch.nn.utils.parameters_to_vector(self.received_model.parameters())
-            self.local_gradient = (new_params - old_params) / self.local_lr
+        # Calculate local gradient relative to received model
+        with self.lock:
+            trained_params = torch.nn.utils.parameters_to_vector(self.model.parameters())
+            self.local_gradient = (trained_params - initial_params) / self.local_lr
 
-            print(f"Client {self.client_id} | Staleness: {self.staleness}")
+        print(f"Client {self.client_id} completed training | Staleness: {self.staleness}")
 
-    def transmit_gradient(self):
+    def _transmit_gradient(self):
+        """Prepare and transmit gradient via OTA aggregation"""
         if self.local_gradient is None:
             return
 
-        h = self.h_k
-        p = self.p_k
-        tau = self.staleness if self.staleness > 0 else 1  # avoid div by 0
-        gamma = 1.0 / tau
+        with self.lock:
+            # Staleness-aware weighting
+            tau = max(self.staleness, 1)  # Ensure τ ≥ 1
+            gamma = 1.0 / (tau + 1e-6)
+            
+            # Construct transmission signal (Eq. 7)
+            h = self.h_k
+            p = self.p_k
+            b_k = torch.conj(h) / (h.abs() ** 2 + 1e-6)
+            s_k = (p * gamma) * b_k * self.local_gradient.to(torch.cfloat)
 
-        b_k = torch.conj(h) / (h.abs() ** 2 + 1e-6)
-        if b_k.shape != self.local_gradient.shape:
-            b_k = b_k.expand_as(self.local_gradient)
+            # Calculate actual energy consumption
+            E_comm = torch.norm(s_k).item() ** 2
+            E_comp = self.mu_k * (self.f_k ** 2) * self.C * len(self.dataset)
+            total_energy = E_comp + E_comm
 
-        s_k = (p * gamma) * b_k * self.local_gradient.to(torch.cfloat)
-
-        # Communication energy (more realistic):
-        E_comm = torch.norm(s_k).item() ** 2
-        E_comp = self.mu_k * (self.f_k ** 2) * self.C * len(self.dataloader.dataset)
-        total_energy = E_comp + E_comm
-
-        if self.send_gradient_callback:
-            self.send_gradient_callback(self.client_id, s_k, total_energy)
+            if self.send_gradient_callback:
+                self.send_gradient_callback(
+                    client_id=self.client_id,
+                    signal=s_k.detach().cpu(),
+                    energy=total_energy
+                )
 
     def set_callbacks(self, done_cb, send_cb):
+        """Register server notification callbacks"""
         self.notify_done_callback = done_cb
         self.send_gradient_callback = send_cb
 
     def trigger_transmission(self):
+        """Signal client to initiate OTA transmission"""
         self.grad_ready_event.set()
 
     def stop(self):
+        """Gracefully terminate client thread"""
         self.alive = False
+        self.grad_ready_event.set()  # Unblock if waiting
