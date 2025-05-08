@@ -1,140 +1,130 @@
-import torch
-import numpy as np
 import threading
+import numpy as np
+import torch
+from queue import Queue
 
 class Server:
-    def __init__(self, model, device, num_clients, V, P_max, T, noise_std=1e-3):
-        self.device = device
-        self.model = model.to(self.device)
-        self.global_model_flat = self.flatten_model()
-        
-        # Lyapunov optimization parameters
-        self.V = V
-        self.P_max = P_max
-        self.T = T
-        self.Q = 0.0  # Virtual energy queue
-
-        self.noise_std = noise_std  # OTA noise std
+    def __init__(self, model, num_clients, total_rounds, E_max, V, global_lr=0.01, communication_latency=1.0):
+        self.model = model
         self.num_clients = num_clients
+        self.total_rounds = total_rounds
+        self.E_max = E_max
+        self.V = V
+        self.global_lr = global_lr
+        self.communication_latency = communication_latency
 
-    def flatten_model(self):
-        return torch.cat([param.data.view(-1) for param in self.model.parameters()])
+        self.clients = []
+        self.selected_clients = []
+        self.ready_clients = set()
+        self.client_gradients = {}
+        self.client_energies = {}
+        self.global_model = model.state_dict()
+        self.lock = threading.Lock()
+        self.round_complete = threading.Event()
+        self.round = 0
 
-    def set_model_from_flat(self, flat_model):
-        pointer = 0
-        for param in self.model.parameters():
-            num_param = param.numel()
-            param.data = flat_model[pointer:pointer + num_param].view_as(param).clone()
-            pointer += num_param
+        # Lyapunov virtual energy queue
+        self.energy_queue = 0
+        self.energy_per_round = E_max / total_rounds
 
-    def select_clients(self, ready_clients, tau_cm):
-        """
-        Algorithm 1: Adaptive client selection based on drift-plus-penalty.
-        """
-        if not ready_clients:
-            print("[Server] No ready clients to select from.")
-            return []
+        # Metrics
+        self.training_times = []
+        self.energy_consumption = []
 
-        print(f"[Server] Running selection from {len(ready_clients)} ready clients.")
+    def register_clients(self, clients):
+        self.clients = clients
+        for client in clients:
+            client.set_callbacks(self.receive_signal, self.receive_gradient)
 
-        # Step 6: Compute remaining training times
-        dtk = {c.id: c.get_computation_time() for c in ready_clients}
+    def receive_signal(self, client_id):
+        with self.lock:
+            self.ready_clients.add(client_id)
+            if all(cid in self.ready_clients for cid in self.selected_clients):
+                self.round_complete.set()
 
-        # Step 7: Sort clients ascending order of dt_k
-        sorted_clients = sorted(ready_clients, key=lambda c: dtk[c.id])
+    def receive_gradient(self, client_id, gradient, power, gamma):
+        with self.lock:
+            self.client_gradients[client_id] = gradient
+            energy = power * torch.norm(gradient).item() ** 2  # OTA transmission energy
+            self.client_energies[client_id] = energy
+            self.clients[client_id].power = power
+            self.clients[client_id].gamma = gamma
 
-        # Step 5: Initialize
-        selected_St = []
-        Jmin = float('inf')
+    def select_clients_dpp(self):
+        N_t = [k for k in range(self.num_clients)]
+        candidate_set = []
+        J_min = float("inf")
+        selected = []
 
-        # Step 8-17: Add clients greedily
-        for client in sorted_clients:
-            tentative_St = selected_St + [client]
-            Dt = max(dtk[c.id] for c in tentative_St) + tau_cm
+        # Sort by estimated local training time
+        N_t_sorted = sorted(N_t, key=lambda k: self.clients[k].estimated_training_time())
 
-            # Drift-plus-penalty objective
-            drift_penalty = self.V * Dt + self.Q * sum(c.gtk.norm().item()**2 for c in tentative_St)
+        for k in N_t_sorted:
+            candidate_set.append(k)
+            D_t = max([self.clients[i].estimated_training_time() for i in candidate_set])
+            E_t = sum([self.clients[i].estimated_energy() for i in candidate_set])
+            J = self.V * D_t + self.energy_queue * E_t
 
-            print(f"[Server] Tentatively adding Client {client.id}: DriftPenalty = {drift_penalty:.2f}")
-
-            if drift_penalty < Jmin:
-                Jmin = drift_penalty
-                selected_St = tentative_St
+            if J < J_min:
+                J_min = J
+                selected = list(candidate_set)
             else:
-                print(f"[Server] Adding Client {client.id} did not improve objective. Stopping selection.")
                 break
 
-        print(f"[Server] Final selected clients: {[c.id for c in selected_St]}")
-        return selected_St
+        return selected
 
-    def assign_events(self, selected_clients):
-        """
-        Assign a new threading.Event to each selected client to signal readiness.
-        """
-        event_map = {}
-        for client in selected_clients:
-            ready_event = threading.Event()
-            event_map[client.id] = ready_event
-            client.receive_global_model(self.global_model_flat.clone(), server_ready_event=ready_event)
-            print(f"[Server] Sent global model to Client {client.id} with event.")
-        return event_map
+    def aggregate_gradients(self):
+        total_weight = sum(
+            self.clients[i].power * self.clients[i].gamma for i in self.selected_clients
+        )
+        aggregated_gradient = None
 
-    def wait_for_clients(self, event_map):
-        """
-        Wait for all selected clients to finish local training.
-        """
-        print(f"[Server] Waiting for {len(event_map)} clients to complete local training...")
-        for client_id, event in event_map.items():
-            event.wait()
-            print(f"[Server] Client {client_id} signaled ready.")
+        for k in self.selected_clients:
+            alpha_k = self.clients[k].power * self.clients[k].gamma / total_weight
+            grad = self.client_gradients[k]
+            if aggregated_gradient is None:
+                aggregated_gradient = {key: alpha_k * val.clone() for key, val in grad.items()}
+            else:
+                for key in aggregated_gradient:
+                    aggregated_gradient[key] += alpha_k * grad[key]
 
-    def receive_ota_signal(self, selected_clients):
-        """
-        OTA aggregation from selected clients.
-        """
-        if not selected_clients:
-            print("[Server] No clients selected. Returning zero gradient.")
-            return torch.zeros_like(self.global_model_flat)
+        return aggregated_gradient
 
-        print(f"[Server] Receiving OTA signal from clients: {[c.id for c in selected_clients]}")
+    def update_global_model(self, aggregated_gradient):
+        new_state_dict = self.global_model.copy()
+        for key in new_state_dict:
+            new_state_dict[key] -= self.global_lr * aggregated_gradient[key].real  # only use real part
+        self.model.load_state_dict(new_state_dict)
+        self.global_model = new_state_dict
 
-        aggregated_signal = torch.zeros_like(self.global_model_flat, dtype=torch.cfloat)
-        self.client_powers = {}  # Save (ptk, gamma_tk) per client
+    def update_virtual_queue(self):
+        round_energy = sum(self.client_energies[k] for k in self.selected_clients)
+        self.energy_queue = max(self.energy_queue + round_energy - self.energy_per_round, 0)
+        self.energy_consumption.append(round_energy)
 
-        for client in selected_clients:
-            ptk = np.random.uniform(0.5, 2.0)
-            gamma_tk = 1.0 / (1 + client.staleness)
-            s_tk = client.get_ota_signal(ptk, gamma_tk)
-            aggregated_signal += s_tk
-            self.client_powers[client.id] = (ptk, gamma_tk)
-            print(f"[Server] Client {client.id}: ptk={ptk:.2f}, gamma_tk={gamma_tk:.2f}, staleness={client.staleness}")
+    def run_round(self, t):
+        self.round = t
+        self.client_gradients.clear()
+        self.client_energies.clear()
+        self.ready_clients.clear()
+        self.round_complete.clear()
 
-        noise = torch.randn_like(aggregated_signal) * self.noise_std
-        aggregated_signal += noise
+        self.selected_clients = self.select_clients_dpp()
 
-        normalization_factor = sum(ptk * gamma_tk for ptk, gamma_tk in self.client_powers.values())
-        normalized_gradient = aggregated_signal / normalization_factor
-        print(f"[Server] OTA aggregation complete. Normalization factor: {normalization_factor:.4f}")
+        for k in self.selected_clients:
+            self.clients[k].receive_global_model(self.model, self.clients[k].staleness)
 
-        return normalized_gradient
+        self.round_complete.wait()
 
-    def global_update(self, normalized_gradient, eta_global):
-        """
-        Update the global model using the aggregated gradient.
-        """
-        self.global_model_flat -= eta_global * normalized_gradient.real
-        self.set_model_from_flat(self.global_model_flat)
-        print("[Server] Global model updated.")
+        agg_grad = self.aggregate_gradients()
+        self.update_global_model(agg_grad)
+        self.update_virtual_queue()
 
-    def update_virtual_queue(self, selected_clients):
-        """
-        Update the Lyapunov virtual queue.
-        """
-        round_energy = 0.0
-        for client in selected_clients:
-            ptk, gamma_tk = self.client_powers[client.id]
-            energy = (ptk * gamma_tk)**2 * client.gtk.norm().item()**2
-            round_energy += energy
+        print(f"[Server] Round {t} complete. Selected clients: {self.selected_clients}. Energy queue: {self.energy_queue:.2f}")
 
-        self.Q = max(self.Q + round_energy - (self.P_max / self.T), 0)
-        print(f"[Server] Updated virtual queue Q(t): {self.Q:.2f}")
+    def evaluate_global_model(self):
+        self.model.eval()
+        return 0.0  # Placeholder for actual evaluation
+
+    def report_metrics(self):
+        return self.training_times, self.energy_consumption
