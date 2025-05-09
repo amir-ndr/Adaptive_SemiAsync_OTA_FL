@@ -4,6 +4,7 @@ import torch.optim as optim
 import numpy as np
 import threading
 import time
+import logging
 
 class Client(threading.Thread):
     def __init__(self, client_id, model_fn, dataset, dataloader, device, local_lr=0.01):
@@ -11,146 +12,175 @@ class Client(threading.Thread):
         self.client_id = client_id
         self.device = device
         self.model_fn = model_fn
-        self.model = model_fn().to(device)
-        self.dataset = dataset
         self.dataloader = dataloader
         self.lock = threading.Lock()
-
-        # Client-specific characteristics
-        self.local_lr = local_lr
-        self.f_k = np.random.uniform(1e8, 3e8)  # Computational capability (FLOPS)
+        
+        # Model management
+        self.current_model = model_fn().to(device)
+        self.reference_model = None  # Model version for gradient calculation
+        
+        # Hardware characteristics
+        self.f_k = np.random.uniform(1e9, 3e9)  # Compute capacity (FLOPS)
         self.p_k = np.random.uniform(0.1, 5.0)  # Transmit power (W)
-        self.mu_k = 1e-28  # CPU efficiency coefficient
-        self.C = np.random.uniform(5e5, 2e6)  # FLOPs per sample
-        
-        # Wireless channel characteristics (match model parameter dimensions)
-        model_params_size = sum(p.numel() for p in self.model.parameters())
-        self.h_k = torch.randn(model_params_size, dtype=torch.cfloat, device=device)
-        
-        # Training state management
+        self.mu_k = 1e-28  # Energy efficiency coefficient
+        self.C = np.random.uniform(1e4, 5e4)  # FLOPs per sample
+
+        # Wireless channel
+        model_size = sum(p.numel() for p in self.current_model.parameters())
+        self.h_k = torch.randn(model_size, dtype=torch.cfloat, device=device)
+
+        # Training state
         self.staleness = 0
-        self.received_model = None
         self.selected = False
-        self.grad_ready_event = threading.Event()
-        self.local_gradient = None
+        self.ready = False
+        self.training_progress = 0.0
+        self.total_rounds = len(dataloader)
+        self.current_round = 0
         
-        # Callbacks and lifecycle management
+        # Communication
+        self.grad_ready_event = threading.Event()
+        self.alive = True
         self.notify_done_callback = None
         self.send_gradient_callback = None
-        self.alive = True
 
-    def receive_global_model(self, global_model, staleness):
-        """Update client with fresh global model and reset training state"""
+    def receive_global_model(self, global_model_state, staleness):
+        """Update model reference for gradient calculation"""
         with self.lock:
             self.staleness = staleness
-            self.received_model = global_model.to(self.device)
-            self.model.load_state_dict(global_model.state_dict())
+            self.reference_model = self.model_fn().to(self.device)
+            self.reference_model.load_state_dict(global_model_state)
             self.selected = True
+            self.current_round = 0  # Reset training progress
 
     def estimated_training_time(self):
-        """Calculate remaining local computation time"""
-        return (self.C * len(self.dataloader.dataset)) / self.f_k
+        """Remaining time for current training task"""
+        remaining_batches = len(self.dataloader) - self.current_round
+        batch_flops = self.C * self.dataloader.batch_size
+        return (remaining_batches * batch_flops) / self.f_k
 
     def estimated_energy(self):
-        """Calculate estimated total energy consumption"""
-        with self.lock:
-            comp_energy = self.mu_k * (self.f_k ** 2) * self.C * len(self.dataset)
-            
-            # Staleness-aware communication energy estimate
-            tau = max(self.staleness, 1)  # Prevent division by zero
-            gamma = 1.0 / (tau + 1e-6)
-            comm_energy = (self.p_k ** 2) * (gamma ** 2) * torch.norm(self.h_k).item()
-            
-            return comp_energy + comm_energy
+        """Energy estimate for current training + transmission"""
+        comp_energy = self.mu_k * (self.f_k**2) * self.C * len(self.dataloader.dataset)
+        gamma = 1 / (1 + self.staleness)
+        comm_energy = (self.p_k**2) * (gamma**2) * torch.norm(self.h_k).item()
+        return comp_energy + comm_energy
 
     def run(self):
-        """Main client execution loop"""
+        """Continuous training process"""
+        dataloader_iter = iter(self.dataloader)
+        
         while self.alive:
-            if self.selected and self.received_model is not None:
-                self._perform_local_training()
-                
-                # Notify server training is complete
-                if self.notify_done_callback:
-                    self.notify_done_callback(self.client_id)
-                
-                # Wait for server's OTA transmission signal
-                self.grad_ready_event.wait()
-                self.grad_ready_event.clear()
-                
-                self._transmit_gradient()
-                self.selected = False
-                self.staleness = 0
+            if self.selected and self.reference_model is not None:
+                # Start new training task with fresh reference
+                self._perform_scheduled_training()
             else:
-                # Idle state - increment staleness counter
-                time.sleep(0.1)
-                self.staleness += 1
+                # Continue current training trajectory
+                self._perform_background_training(dataloader_iter)
 
-    def _perform_local_training(self, E=5):
-        """Execute local SGD with staleness-aware initialization"""
-        optimizer = optim.SGD(self.model.parameters(), lr=self.local_lr)
-        self.model.train()
-
-        # Store initial parameters for gradient calculation
-        with self.lock:
-            initial_params = torch.nn.utils.parameters_to_vector(
-                self.received_model.parameters()
-            ).detach().clone()
-
-        # Local training loop
-        for _ in range(E):
-            for x, y in self.dataloader:
+    def _perform_scheduled_training(self):
+        """Complete training task with reference model"""
+        try:
+            self.current_round = 0
+            self.training_progress = 0.0
+            
+            # Train for full local epochs
+            for batch_idx, (x, y) in enumerate(self.dataloader):
+                if not self.selected: break  # Allow interruption
+                
                 x, y = x.to(self.device), y.to(self.device)
-                optimizer.zero_grad()
-                output = self.model(x)
-                loss = nn.CrossEntropyLoss()(output, y)
-                loss.backward()
-                optimizer.step()
+                self._train_batch(x, y)
+                self.current_round += 1
+                self.training_progress = batch_idx / len(self.dataloader)
 
-        # Calculate local gradient relative to received model
+            if self.selected:  # Only notify if completed fully
+                self._handle_training_completion()
+                
+        except Exception as e:
+            logging.error(f"Client {self.client_id} training failed: {str(e)}")
+        finally:
+            self.selected = False
+
+    def _perform_background_training(self, dataloader_iter):
+        """Continuous background training"""
+        try:
+            x, y = next(dataloader_iter)
+        except StopIteration:
+            dataloader_iter = iter(self.dataloader)
+            x, y = next(dataloader_iter)
+            
+        x, y = x.to(self.device), y.to(self.device)
+        self._train_batch(x, y)
+        time.sleep(0.01)  # Prevent CPU overuse
+
+    def _train_batch(self, x, y):
+        """Core training logic for one batch"""
         with self.lock:
-            trained_params = torch.nn.utils.parameters_to_vector(self.model.parameters())
-            self.local_gradient = (trained_params - initial_params) / self.local_lr
+            model = self.model_fn().to(self.device)
+            model.load_state_dict(self.current_model.state_dict())
+            optimizer = optim.SGD(model.parameters(), lr=self.local_lr)
+            
+            optimizer.zero_grad()
+            output = model(x)
+            loss = nn.CrossEntropyLoss()(output, y)
+            loss.backward()
+            optimizer.step()
+            
+            # Update current model
+            self.current_model.load_state_dict(model.state_dict())
 
-        print(f"Client {self.client_id} completed training | Staleness: {self.staleness}")
+    def _handle_training_completion(self):
+        """Finalize training task and prepare transmission"""
+        with self.lock:
+            # Calculate gradient relative to reference model
+            current_params = torch.nn.utils.parameters_to_vector(
+                self.current_model.parameters()
+            )
+            reference_params = torch.nn.utils.parameters_to_vector(
+                self.reference_model.parameters()
+            )
+            self.local_gradient = (current_params - reference_params) / self.local_lr
+
+        # Notify server and wait for transmission
+        if self.notify_done_callback:
+            self.notify_done_callback(self.client_id)
+        self.grad_ready_event.wait()
+        self.grad_ready_event.clear()
+        self._transmit_gradient()
 
     def _transmit_gradient(self):
-        """Prepare and transmit gradient via OTA aggregation"""
-        if self.local_gradient is None:
-            return
-
+        """OTA transmission implementation"""
         with self.lock:
-            # Staleness-aware weighting
-            tau = max(self.staleness, 1)  # Ensure τ ≥ 1
-            gamma = 1.0 / (tau + 1e-6)
-            
-            # Construct transmission signal (Eq. 7)
-            h = self.h_k
-            p = self.p_k
-            b_k = torch.conj(h) / (h.abs() ** 2 + 1e-6)
-            s_k = (p * gamma) * b_k * self.local_gradient.to(torch.cfloat)
+            if self.local_gradient is None:
+                return
 
-            # Calculate actual energy consumption
-            E_comm = torch.norm(s_k).item() ** 2
-            E_comp = self.mu_k * (self.f_k ** 2) * self.C * len(self.dataset)
-            total_energy = E_comp + E_comm
+            # Staleness-aware signal construction
+            gamma = 1 / (1 + self.staleness)
+            h_inv = torch.conj(self.h_k) / (self.h_k.abs().square() + 1e-6)
+            tx_signal = (self.p_k * gamma) * h_inv * self.local_gradient.to(torch.cfloat)
+
+            # Energy calculation
+            comp_energy = self.mu_k * (self.f_k**2) * self.C * len(self.dataloader.dataset)
+            comm_energy = torch.norm(tx_signal).item() ** 2
+            total_energy = comp_energy + comm_energy
+
+            logging.info(
+                f"Client {self.client_id} TX | "
+                f"Staleness: {self.staleness} | "
+                f"Energy: {total_energy:.2f}J | "
+                f"Grad Norm: {torch.norm(self.local_gradient).item():.2f}"
+            )
 
             if self.send_gradient_callback:
                 self.send_gradient_callback(
                     client_id=self.client_id,
-                    signal=s_k.detach().cpu(),
+                    signal=tx_signal.detach().cpu(),
                     energy=total_energy
                 )
 
     def set_callbacks(self, done_cb, send_cb):
-        """Register server notification callbacks"""
         self.notify_done_callback = done_cb
         self.send_gradient_callback = send_cb
 
-    def trigger_transmission(self):
-        """Signal client to initiate OTA transmission"""
-        self.grad_ready_event.set()
-
     def stop(self):
-        """Gracefully terminate client thread"""
         self.alive = False
-        self.grad_ready_event.set()  # Unblock if waiting
+        self.grad_ready_event.set()
