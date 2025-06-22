@@ -63,7 +63,7 @@ def main():
         sigma_n=0.1,           # Noise std
         tau_cm=0.05,           # Comm latency
         T_max=300,             # Time budget (s)
-        E_max=1.0,            # Energy budget
+        E_max=10.0,            # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
     )
@@ -74,93 +74,54 @@ def main():
     
     # Initialize previous round duration
     # Initialize previous round duration
-    D_t_prev = 0  # For first round initialization
+    D_t_prev = 0
 
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
         print(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
-        # 1. Update client states with previous round's duration
+        # 1. Update client computation states with previous round's duration
         for client in clients:
-            # Update computation time (even if not finished)
-            # This reduces dt_k and may mark client as ready if computation completes
-            client.update_computation(D_t_prev)
+            client.update_computation_time(D_t_prev)
         
-        # 2. Compute scores and sort clients based on remaining computation time
-        for client in clients:
-            # Set channel gain for this round
-            client.set_channel_gain()
-            
-            # Compute score ρ_k = |h_k| / √(Q_e * ||g||²)
-            # Use last gradient norm if available, else use a default value
-            grad_norm = client.gradient_norm if client.gradient_norm > 0 else 1.0
-            score = abs(client.h_t_k) / np.sqrt(max(1e-8, server.Q_e[client.client_id]) * max(1e-8, grad_norm))
-            client.score = score
+        # 2. Compute scores and sort clients
+        # (This is now handled in select_clients)
         
-        # 3. Sort clients by ascending dt_k (lowest remaining time first)
-        # and then descending score (highest score first)
-        sorted_clients = sorted(clients, key=lambda c: (c.dt_k, -c.score))
-        
-        # 4. Greedy client selection (Algorithm 1)
-        selected = []
-        best_cost = float('inf')
-        best_power = {}
-        
-        for client in sorted_clients:
-            candidate_set = selected + [client]
-            
-            # Compute power allocation for candidate set
-            power_alloc, c_values = server._compute_power(candidate_set)
-            if not power_alloc:
-                continue
-                
-            # Compute round duration (max remaining time in candidate set + communication latency)
-            D_temp = max(c.dt_k for c in candidate_set) + server.tau_cm
-            
-            # Compute drift-plus-penalty cost
-            cost = server._compute_cost(candidate_set, power_alloc, D_temp)
-            
-            # Keep client if cost decreases
-            if cost < best_cost:
-                selected = candidate_set
-                best_cost = cost
-                best_power = power_alloc
-            else:
-                # Stop when cost starts increasing
-                break
-        
+        # 3. Select clients and allocate power
+        selected, power_alloc = server.select_clients()
         print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
         
-        # 5. Compute gradients for selected clients
+        # 4. Compute gradients for selected clients
         for client in selected:
-            # Use current model to compute gradient (even if computation not complete)
-            client.compute_gradient(global_model)
+            client.compute_gradient()
         
-        # 6. Determine round duration
+        # 5. Determine round duration
         if selected:
             D_t = max(c.dt_k for c in selected) + server.tau_cm
-            aggregated = server.aggregate(selected, best_power)
+            aggregated = server.aggregate(selected, power_alloc)
+            server.update_model(aggregated)
         else:
-            D_t = server.tau_cm  # Minimal time if no selection
+            D_t = server.tau_cm
         
-        # 7. Update queues and client states
-        server.update_queues(selected, best_power, D_t)
+        # 6. Update queues and client states
+        server.update_queues(selected, power_alloc, D_t)
         
-        # 8. Store for next round's client update
+        # 7. Store for next round
         D_t_prev = D_t
         
-        # 9. Evaluate periodically
-        if (round_idx + 1) % 5 == 0 or round_idx == 0:
-            acc = evaluate_model(global_model, test_loader, DEVICE)
+        # 8. Evaluate periodically
+        if (round_idx + 1) % 5 == 0:
+            acc = evaluate_model(server.global_model, test_loader, DEVICE)
             accuracies.append(acc)
             print(f"Accuracy: {acc:.2f}%")
         
-        # 10. Log
+        # 9. Log
         round_time = time.time() - round_start
-        print(f"Round Duration: {D_t:.4f}s | "
+        print(f"Simulated Round Duration: {D_t:.4f}s | "
             f"Wall Clock: {round_time:.2f}s | "
             f"Max Energy Queue: {max(server.Q_e.values()):.2f} | "
             f"Time Queue: {server.Q_time:.2f}")
+
     
     # Plot results
     plt.figure(figsize=(12, 4))

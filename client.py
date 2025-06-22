@@ -16,18 +16,16 @@ class Client:
         self.device = device
         
         # State variables (paper: Sec III.B)
-        self.dt_k = 0  # Remaining computation time
+        # Initialize with full computation time
+        self.dt_k = C * Ak / fk  # Initial computation time
         self.tau_k = 0  # Staleness counter
         self.last_gradient = None
         self.gradient_norm = 0
         self.h_t_k = None  # Current channel gain
-        self.ready = False  # Has finished computation
+        self.ready = False  # Not ready initially
 
-    def compute_gradient(self, global_model):
-        """Compute gradient using current model state"""
-        # Update model with latest global version
-        self.local_model.load_state_dict(global_model.state_dict())
-        
+    def compute_gradient(self):
+        """Compute gradient using client's local model"""
         # Sample mini-batch
         indices = np.random.choice(self.data_indices, self.Ak, replace=False)
         batch = [self.train_dataset[i] for i in indices]
@@ -49,22 +47,20 @@ class Client:
         flat_gradient = torch.cat([g.view(-1) for g in gradient])
         self.last_gradient = flat_gradient
         self.gradient_norm = torch.norm(flat_gradient).item()
-        
         return True
 
+    def update_computation_time(self, D_t):
+        """Update remaining computation time according to paper (Eq. 21c)"""
+        # If not selected, reduce remaining time
+        if not self.ready:
+            self.dt_k = max(0, self.dt_k - D_t)
+            self.ready = (self.dt_k <= 0)
+        return self.ready
 
-    def update_computation(self, elapsed_time):
-        """Update computation state (call at start of each round)"""
-        if self.dt_k > 0:
-            self.dt_k = max(0, self.dt_k - elapsed_time)
-        return self.dt_k <= 0  # Return True if computation completed
-
-    def set_channel_gain(self):
-        """Simulate channel gain (Rayleigh fading)"""
-        real = np.random.normal(0, 1)
-        imag = np.random.normal(0, 1)
-        self.h_t_k = complex(real, imag)
-        return abs(self.h_t_k)
+    def reset_computation(self):
+        """Reset computation time when selected (paper: Eq. 21c)"""
+        self.dt_k = self.C * self.Ak / self.fk
+        self.ready = False
 
     def reset_staleness(self):
         """Reset after being selected (paper: Sec III.B)"""
@@ -73,3 +69,10 @@ class Client:
     def increment_staleness(self):
         """Increment when not selected (paper: Sec III.B)"""
         self.tau_k += 1
+
+    def set_channel_gain(self):
+        """Simulate channel gain (Rayleigh fading)"""
+        real = np.random.normal(0, 1)
+        imag = np.random.normal(0, 1)
+        self.h_t_k = complex(real, imag)
+        return abs(self.h_t_k)
