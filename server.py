@@ -1,208 +1,280 @@
-import threading
-import numpy as np
+import imp
 import torch
-import logging
-from collections import defaultdict
-
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s:%(message)s')
+import numpy as np
+from torch.utils.data import DataLoader
+from model import CNNMnist
+from dataloader import load_mnist, partition_mnist_noniid
+import matplotlib.pyplot as plt
+import time
+from client import Client
 
 class Server:
-    def __init__(self, model, num_clients, total_rounds, E_max, V,
-                 global_lr=0.01, noise_power=0.1, device="cpu"):
-        self.model = model.to(device)
-        self.num_clients = num_clients
-        self.total_rounds = total_rounds
-        self.E_max = E_max
-        self.V = V
-        self.global_lr = global_lr
-        self.noise_power = noise_power
-        self.device = device
-
-        # Client management
-        self.clients = []
-        self.client_staleness = defaultdict(int)
-        self.selected_clients = []
-        self.ready_clients = set()
-        
-        # Communication buffers
-        self.client_signals = {}
-        self.client_energies = {}
-        
-        # Lyapunov optimization
-        self.energy_queue = 0.0
-        self.energy_per_round = E_max / total_rounds
-        
-        # Synchronization
-        self.lock = threading.Lock()
-        self.round_complete = threading.Event()
-        self.current_round = 0
-
-    def register_clients(self, clients):
+    def __init__(self, global_model, clients, V=1.0, sigma_n=0.1, 
+                 tau_cm=0.1, T_max=100, E_max=None, device='cpu'):
+        self.global_model = global_model.to(device)
         self.clients = clients
-        for client in clients:
-            client.set_callbacks(self._notify_client_completion, self._receive_client_signal)
-        self.client_staleness = {k:0 for k in range(len(clients))}
-
-    def run_round(self, round_idx):
-        self.current_round = round_idx
-        logging.info(f"\n=== Starting Round {round_idx}/{self.total_rounds} ===")
+        self.device = device
+        self.V = V
+        self.sigma_n = sigma_n
+        self.tau_cm = tau_cm
+        self.T_max = T_max
+        self.d = self._get_model_dimension()
         
-        try:
-            # Phase 1: Client selection
-            self.selected_clients = self._select_clients()
-            if not self.selected_clients:
-                logging.warning("No clients selected for this round")
-                return
-
-            # Phase 2: Model broadcast
-            self._broadcast_global_model()
-            
-            # Phase 3: Wait for client responses
-            if not self._wait_for_clients(timeout=300):
-                logging.warning("Round timed out waiting for clients")
-                return
-
-            # Phase 4: OTA aggregation and model update
-            aggregated_grad = self._aggregate_signals()
-            if aggregated_grad is not None:
-                self._update_global_model(aggregated_grad)
-            
-            # Phase 5: System state updates
-            self._update_virtual_queue()
-            self._update_staleness()
-
-        except Exception as e:
-            logging.error(f"Round failed: {str(e)}")
-
-    def _select_clients(self):
-        """Implements Algorithm 1 from the paper"""
-        candidates = sorted([c for c in self.clients if c.ready],
-                           key=lambda x: x.estimated_training_time())
+        # Virtual queues
+        self.Q_e = {client.client_id: 0.0 for client in clients}
+        self.Q_time = 0.0
+        self.E_max = E_max or {client.client_id: 1.0 for client in clients}
         
-        best_set = []
-        min_cost = float('inf')
-        current_set = []
-
+        # History tracking
+        self.selected_history = []
+        self.queue_history = []
+        self.aggregation_times = []
+        
+    def _get_model_dimension(self):
+        return sum(p.numel() for p in self.global_model.parameters())
+    
+    def select_clients(self, current_time):
+        """Select clients using greedy algorithm"""
+        candidates = [c for c in self.clients if c.last_gradient is not None]
+        
+        if not candidates:
+            return [], {}
+            
+        # Compute scores
         for client in candidates:
-            current_set.append(client)
-            D_t = max(c.estimated_training_time() for c in current_set)
-            E_t = sum(c.estimated_energy() for c in current_set)
-            objective = self.V * D_t + self.energy_queue * E_t
-
-            if objective < min_cost:
-                best_set = current_set.copy()
-                min_cost = objective
+            client.set_channel_gain()
+            score = abs(client.h_t_k) / np.sqrt(max(1e-8, self.Q_e[client.client_id]) * 
+                                              max(1e-8, client.gradient_norm))
+            client.score = score
+            
+        # Sort by dt_k (ascending) and score (descending)
+        candidates.sort(key=lambda c: (c.dt_k, -c.score))
+        
+        # Greedy selection
+        selected = []
+        best_cost = float('inf')
+        best_power = {}
+        
+        for client in candidates:
+            temp_selected = selected + [client]
+            
+            # Compute power allocation
+            power_alloc, c_values = self._compute_power(temp_selected)
+            if not power_alloc:
+                continue
+                
+            # Compute round duration
+            comp_times = [c.dt_k for c in temp_selected]
+            D_temp = max(comp_times) + self.tau_cm
+            
+            # Compute cost
+            cost = self._compute_cost(temp_selected, power_alloc, D_temp)
+            
+            if cost < best_cost:
+                selected = temp_selected
+                best_cost = cost
+                best_power = power_alloc
             else:
                 break
+                
+        return selected, best_power
 
-        # Fallback to fastest client if no valid selection
-        if not best_set and candidates:
-            best_set = [candidates[0]]
-            logging.warning("Forced selection of fastest client")
+    def _compute_power(self, selected):
+        """Power allocation for selected clients"""
+        c_values = {}
+        for client in selected:
+            c = self.Q_e[client.client_id] * client.gradient_norm**2 / abs(client.h_t_k)**2
+            c_values[client.client_id] = c
+            
+        inv_sqrt_sum = sum(1/np.sqrt(max(1e-8, c)) for c in c_values.values())
+        total_power = ((self.V * self.d * self.sigma_n**2) / 
+                      (len(selected) * inv_sqrt_sum**2)) ** 0.25
+        
+        power_alloc = {}
+        for client in selected:
+            c = c_values[client.client_id]
+            power = (1/np.sqrt(c) / inv_sqrt_sum) * total_power
+            power_alloc[client.client_id] = min(power, client.P_max)
+            
+        return power_alloc, c_values
 
-        selected_ids = [c.client_id for c in best_set]
-        logging.info(f"Selected clients: {selected_ids}")
-        return selected_ids
-
-    def _broadcast_global_model(self):
-        """Distribute current global model to selected clients"""
-        model_state = self.model.state_dict()
-        for cid in self.selected_clients:
-            client = self.clients[cid]
-            staleness = self.client_staleness[cid]
-            logging.info(f"Broadcasting to Client {cid} | Staleness: {staleness}")
-            client.receive_global_model(model_state, staleness)
-
-    def _aggregate_signals(self):
-        """Implements OTA aggregation from Eq. 9-12"""
-        valid_clients = [cid for cid in self.selected_clients 
-                        if cid in self.client_signals]
-        if not valid_clients:
-            return None
-
-        # Calculate total effective power (Eq. 10)
-        total_weight = sum(
-            self.clients[cid].p_k * self._gamma(cid)
-            for cid in valid_clients
+    def _compute_cost(self, selected, power_alloc, D_temp):
+        """Compute drift-plus-penalty cost"""
+        total_power = sum(power_alloc.values())
+        alpha_sum = 0
+        for client in selected:
+            alpha = power_alloc[client.client_id] / total_power
+            alpha_sum += alpha**2
+            
+        convergence_term = 1.0 * alpha_sum + self.d * self.sigma_n**2 / total_power**2
+        energy_cost = sum(
+            self.Q_e[c.client_id] * (power_alloc[c.client_id]**2) * 
+            (c.gradient_norm**2 / abs(c.h_t_k)**2) for c in selected
         )
-        if total_weight < 1e-9:
-            raise ValueError("Aggregation weights too small")
+        
+        return self.V * convergence_term + energy_cost + self.Q_time * D_temp
 
-        # Sum signals and add noise (Eq. 9,11)
-        aggregated = sum(self.client_signals[cid] for cid in valid_clients)
-        noise = torch.randn_like(aggregated) * self.noise_power
-        normalized_grad = (aggregated + noise) / total_weight
+    def aggregate(self, selected, power_alloc):
+        """Perform OTA aggregation"""
+        total_power = sum(power_alloc.values())
+        aggregated = torch.zeros(self.d, device=self.device)
+        
+        for client in selected:
+            p = power_alloc[client.client_id]
+            h = client.h_t_k
+            scaled_grad = client.last_gradient * (p * h.conjugate().real / abs(h))
+            aggregated += scaled_grad
+            
+        # Add noise and normalize
+        noise = torch.randn(self.d, device=self.device) * self.sigma_n
+        return (aggregated + noise) / total_power
 
-        logging.info(f"Aggregated {len(valid_clients)} gradients | "
-                    f"Effective SNR: {torch.norm(aggregated)/self.noise_power:.2f}")
-        return normalized_grad.real
-
-    def _update_global_model(self, aggregated_grad):
-        """Update model parameters with aggregated gradient"""
-        current_params = torch.nn.utils.parameters_to_vector(self.model.parameters())
-        updated_params = current_params - self.global_lr * aggregated_grad
-        torch.nn.utils.vector_to_parameters(updated_params, self.model.parameters())
-        logging.info("Global model updated")
-
-    def _update_virtual_queue(self):
-        """Lyapunov queue update from Eq. 16"""
-        round_energy = sum(self.client_energies.get(cid, 0) 
-                          for cid in self.selected_clients)
-        self.energy_queue = max(self.energy_queue + round_energy - self.energy_per_round, 0)
-        logging.info(f"Energy update | Used: {round_energy:.2f}J | "
-                    f"Queue: {self.energy_queue:.2f}/{self.E_max}")
-
-    def _update_staleness(self):
-        """Update staleness counters based on participation"""
-        for cid in range(len(self.clients)):
-            if cid in self.selected_clients and cid in self.ready_clients:
-                self.client_staleness[cid] = 0
-            else:
-                self.client_staleness[cid] += 1
-
-    def _gamma(self, client_id):
-        """Staleness-aware weight from Eq. 7"""
-        return 1 / (1 + self.client_staleness[client_id])
-
-    def _wait_for_clients(self, timeout=300):
-        """Synchronize with selected clients"""
-        self.ready_clients.clear()
-        self.round_complete.clear()
-        return self.round_complete.wait(timeout=timeout)
-
-    def _notify_client_completion(self, client_id):
-        """Callback for client training completion"""
-        with self.lock:
-            self.ready_clients.add(client_id)
-            if self.ready_clients.issuperset(self.selected_clients):
-                self.round_complete.set()
-
-    def _receive_client_signal(self, client_id, signal, energy):
-        """Callback for OTA signal reception"""
-        with self.lock:
-            self.client_signals[client_id] = signal.to(self.device)
-            self.client_energies[client_id] = energy
-            logging.debug(f"Received signal from Client {client_id} | "
-                         f"Energy: {energy:.2f}J")
-
-    def evaluate_model(self, test_loader):
-        """Evaluate global model accuracy"""
-        self.model.eval()
-        correct = 0
-        total = 0
+    def update_model(self, update):
+        """Update global model"""
         with torch.no_grad():
-            for inputs, labels in test_loader:
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
-                outputs = self.model(inputs)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-        accuracy = 100 * correct / total
-        logging.info(f"Model accuracy: {accuracy:.2f}%")
-        return accuracy
+            params = torch.nn.utils.parameters_to_vector(self.global_model.parameters())
+            params -= 0.01 * update
+            torch.nn.utils.vector_to_parameters(params, self.global_model.parameters())
 
-    def shutdown(self):
-        """Graceful termination"""
-        for client in self.clients:
-            client.stop()
-        logging.info("Server shutdown completed")
+    def update_queues(self, selected, power_alloc, D_t):
+        """Update virtual queues"""
+        # Update energy queues
+        for client in selected:
+            cid = client.client_id
+            E_com = power_alloc[cid]**2 * client.gradient_norm**2 / abs(client.h_t_k)**2
+            
+            # Use self.E_max[cid] instead of self.E_max
+            self.Q_e[cid] = max(0, self.Q_e[cid] + E_com - self.E_max[cid]/100)
+        
+        # Update time queue
+        avg_round_time = self.T_max / 100
+        self.Q_time = max(0, self.Q_time + D_t - avg_round_time)
+        
+        # Store history
+        self.queue_history.append(self.Q_e.copy())
+        self.selected_history.append([c.client_id for c in selected])
+
+# Evaluation function
+def evaluate_model(model, test_loader, device='cpu'):
+    model.eval()
+    correct, total = 0, 0
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    return 100 * correct / total
+
+# Main simulation
+def main():
+    # Parameters
+    NUM_CLIENTS = 10
+    SIM_TIME = 300  # Simulate for 300 seconds
+    EVAL_INTERVAL = 30  # Evaluate every 30 seconds
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+    
+    print(f"Using device: {DEVICE}")
+    
+    # Load data
+    train_dataset, test_dataset = load_mnist()
+    test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
+    client_data_map = partition_mnist_noniid(train_dataset, NUM_CLIENTS)
+    
+    # Create clients
+    clients = []
+    for cid in range(NUM_CLIENTS):
+        client = Client(
+            client_id=cid,
+            data_indices=client_data_map[cid],
+            model=CNNMnist(),
+            fk=np.random.uniform(1e9, 2e9),
+            mu_k=1e-27,
+            P_max=1.0,
+            C=1000,
+            Ak=32,
+            train_dataset=train_dataset,
+            device=DEVICE
+        )
+        clients.append(client)
+    
+    # Create server
+    global_model = CNNMnist().to(DEVICE)
+    server = Server(
+        global_model=global_model,
+        clients=clients,
+        V=10.0,
+        sigma_n=0.1,
+        tau_cm=0.05,
+        T_max=100,
+        E_max=1.0,
+        device=DEVICE
+    )
+    
+    # Simulation loop
+    start_time = time.time()
+    current_time = 0
+    last_eval = 0
+    accuracies = []
+    eval_times = []
+    
+    while current_time < SIM_TIME:
+        # Update client computations
+        for client in clients:
+            client.compute_gradient(current_time, global_model)
+        
+        # Attempt aggregation
+        selected, power_alloc = server.select_clients(current_time)
+        if selected:
+            # Calculate round duration
+            comp_times = [c.dt_k for c in selected]
+            D_t = max(comp_times) + server.tau_cm
+            
+            # Perform aggregation
+            aggregated = server.aggregate(selected, power_alloc)
+            server.update_model(aggregated)
+            server.update_queues(selected, power_alloc, D_t)
+            
+            # Update time
+            current_time += D_t
+            server.aggregation_times.append(current_time)
+            print(f"Aggregation at {current_time:.2f}s: Selected {len(selected)} clients")
+        else:
+            # No clients ready - advance time
+            next_avail = min(c.next_available for c in clients)
+            current_time = max(current_time + 1, next_avail)
+        
+        # Periodic evaluation
+        if current_time - last_eval > EVAL_INTERVAL:
+            acc = evaluate_model(global_model, test_loader, DEVICE)
+            accuracies.append(acc)
+            eval_times.append(current_time)
+            last_eval = current_time
+            print(f"[{current_time:.2f}s] Accuracy: {acc:.2f}%")
+    
+    # Plot results
+    plt.figure(figsize=(12, 4))
+    plt.subplot(131)
+    plt.plot(eval_times, accuracies)
+    plt.title("Test Accuracy")
+    plt.xlabel("Simulation Time (s)")
+    
+    plt.subplot(132)
+    selected_counts = [len(s) for s in server.selected_history]
+    plt.plot(server.aggregation_times, selected_counts, 'o-')
+    plt.title("Selected Clients per Aggregation")
+    plt.xlabel("Simulation Time (s)")
+    
+    plt.subplot(133)
+    queue_values = [max(q.values()) for q in server.queue_history]
+    plt.plot(server.aggregation_times, queue_values)
+    plt.title("Max Energy Queue")
+    plt.xlabel("Simulation Time (s)")
+    
+    plt.tight_layout()
+    plt.savefig("training_results.png")
+    plt.show()
+
+if __name__ == "__main__":
+    main()
