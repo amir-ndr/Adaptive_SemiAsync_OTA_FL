@@ -94,9 +94,9 @@ class Server:
         
         # Exact formula from paper
         total_power = (
-            (self.V * self.d * self.sigma_n**2) / 
-            (num_clients * (inv_sqrt_c_sum)**2)
-        )**0.25
+        (self.V * self.d * self.sigma_n**2) / 
+        (num_clients * (inv_sqrt_c_sum)**2)
+            )**0.25
         
         power_alloc = {}
         for client in selected:

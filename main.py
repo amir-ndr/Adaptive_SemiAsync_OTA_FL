@@ -25,6 +25,7 @@ def main():
     NUM_CLIENTS = 10
     NUM_ROUNDS = 100
     BATCH_SIZE = 32
+    LOCAL_EPOCHS = 3
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     print(f"Using device: {DEVICE}")
@@ -47,12 +48,12 @@ def main():
             C=1e6,                           # FLOPs per sample
             Ak=BATCH_SIZE,                   # Batch size
             train_dataset=train_dataset,
-            device=DEVICE
+            device=DEVICE,
+            local_epochs=LOCAL_EPOCHS
         )
-        # Initialize as ready
-        client.ready = True
-        client.dt_k = 0
+        # Initialize with full computation time
         clients.append(client)
+        print(f"Client {cid}: Full computation time = {client.dt_k:.4f}s")
     
     # Initialize server
     global_model = CNNMnist().to(DEVICE)
@@ -61,7 +62,7 @@ def main():
         clients=clients,
         V=10.0,               # Lyapunov parameter
         sigma_n=0.1,           # Noise std
-        tau_cm=0.05,           # Comm latency
+        tau_cm=0.05,           # Comm latency (small but non-zero)
         T_max=300,             # Time budget (s)
         E_max=10.0,            # Energy budget
         T_total_rounds=NUM_ROUNDS,
@@ -70,11 +71,7 @@ def main():
     
     # Training loop
     accuracies = []
-    start_time = time.time()
-    
-    # Initialize previous round duration
-    # Initialize previous round duration
-    D_t_prev = 0
+    D_t_prev = 0  # Previous round duration
 
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
@@ -83,19 +80,20 @@ def main():
         # 1. Update client computation states with previous round's duration
         for client in clients:
             client.update_computation_time(D_t_prev)
+            # Print client state for debugging
+            print(f"  Client {client.client_id}: dt_k={client.dt_k:.4f}s, ready={client.ready}")
         
-        # 2. Compute scores and sort clients
-        # (This is now handled in select_clients)
-        
-        # 3. Select clients and allocate power
+        # 2. Select clients and allocate power
         selected, power_alloc = server.select_clients()
         print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
         
-        # 4. Compute gradients for selected clients
+        # 3. Compute gradients for selected clients
         for client in selected:
+            # Compute gradient with specified epochs
             client.compute_gradient()
+            print(f"  Client {client.client_id} computed gradient, norm={client.gradient_norm:.4f}")
         
-        # 5. Determine round duration
+        # 4. Determine round duration
         if selected:
             D_t = max(c.dt_k for c in selected) + server.tau_cm
             aggregated = server.aggregate(selected, power_alloc)
@@ -103,24 +101,28 @@ def main():
         else:
             D_t = server.tau_cm
         
-        # 6. Update queues and client states
+        print(f"Round duration: {D_t:.4f}s")
+        
+        # 5. Update queues and client states
         server.update_queues(selected, power_alloc, D_t)
         
-        # 7. Store for next round
+        # 6. Store for next round
         D_t_prev = D_t
         
-        # 8. Evaluate periodically
-        if (round_idx + 1) % 5 == 0:
+        # 7. Evaluate periodically
+        if (round_idx + 1) % 5 == 0 or round_idx == 0:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
             accuracies.append(acc)
             print(f"Accuracy: {acc:.2f}%")
         
-        # 9. Log
+        # 8. Log
         round_time = time.time() - round_start
-        print(f"Simulated Round Duration: {D_t:.4f}s | "
-            f"Wall Clock: {round_time:.2f}s | "
-            f"Max Energy Queue: {max(server.Q_e.values()):.2f} | "
-            f"Time Queue: {server.Q_time:.2f}")
+        print(f"Wall Clock Time: {round_time:.2f}s | "
+              f"Max Energy Queue: {max(server.Q_e.values()):.2f} | "
+              f"Time Queue: {server.Q_time:.2f}")
+
+    # Plot results (same as before)
+    # ... [rest of your plotting code]
 
     
     # Plot results
