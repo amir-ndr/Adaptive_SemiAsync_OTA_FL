@@ -94,8 +94,8 @@ class Server:
         
         # Exact formula from paper
         total_power = (
-        (self.V * self.d * self.sigma_n**2) / 
-        (num_clients * (inv_sqrt_c_sum)**2)
+                (self.V * self.d * self.sigma_n**2) / 
+                (num_clients * (inv_sqrt_c_sum)**2)
             )**0.25
         
         power_alloc = {}
@@ -140,7 +140,9 @@ class Server:
             p = power_alloc[client.client_id]
             h = client.h_t_k
             # Apply power and channel compensation
-            scaled_grad = client.last_gradient * (p * h.conjugate().real / abs(h))
+            # scaled_grad = client.last_gradient * (p * h.conjugate().real / abs(h))
+            scaled_grad = client.last_gradient * (p / abs(client.h_t_k))
+            print(p / abs(client.h_t_k))
             aggregated += scaled_grad
         
         # Add noise
@@ -160,7 +162,8 @@ class Server:
         for client in selected:
             cid = client.client_id
             # Total energy = computation + communication
-            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak
+            # E_comp = client.mu_k * client.fk**2 * client.C * client.Ak
+            E_comp = 0.1
             E_com = power_alloc[cid]**2 * client.gradient_norm**2 / abs(client.h_t_k)**2
             self.Q_e[cid] = max(0, self.Q_e[cid] + E_comp + E_com - 
                                 self.E_max[cid]/self.T_total_rounds)

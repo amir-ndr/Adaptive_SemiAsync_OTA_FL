@@ -2,13 +2,14 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 import copy
+import time
 
 class Client:
     def __init__(self, client_id, data_indices, model, fk, mu_k, P_max, C, Ak, 
                  train_dataset, device='cpu', local_epochs=1):
         self.client_id = client_id
         self.data_indices = data_indices
-        self.local_model = copy.deepcopy(model)
+        self.local_model = copy.deepcopy(model).to(device)
         self.fk = fk
         self.mu_k = mu_k
         self.P_max = P_max
@@ -35,6 +36,16 @@ class Client:
     def compute_gradient(self):
         """Compute gradient using multiple local epochs"""
         # Store initial model parameters
+
+        remaining = self.dt_k
+        self.reset_computation()  # Reset to full time
+        
+        # Simulate partial computation
+        while self.dt_k > 0:
+            step = min(0.1, self.dt_k)  # Simulate time steps
+            self.dt_k -= step
+            time.sleep(step * 0.01)
+
         initial_weights = [param.clone().detach() for param in self.local_model.parameters()]
         
         # Create DataLoader for local data
@@ -96,9 +107,14 @@ class Client:
         """Increment when not selected (paper: Sec III.B)"""
         self.tau_k += 1
 
+    # def set_channel_gain(self):
+    #     """Simulate channel gain (Rayleigh fading)"""
+    #     real = np.random.normal(0, 1)
+    #     imag = np.random.normal(0, 1)
+    #     self.h_t_k = complex(real, imag)
+    #     return abs(self.h_t_k)
+
     def set_channel_gain(self):
-        """Simulate channel gain (Rayleigh fading)"""
-        real = np.random.normal(0, 1)
-        imag = np.random.normal(0, 1)
-        self.h_t_k = complex(real, imag)
+        gain = complex(np.random.normal(0, 1), np.random.normal(0, 1))
+        self.h_t_k = gain / np.sqrt(2)  # Normalize
         return abs(self.h_t_k)
