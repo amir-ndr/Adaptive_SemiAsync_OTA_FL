@@ -85,6 +85,8 @@ def main():
         
         # 2. Select clients and broadcast current model
         selected, power_alloc = server.select_clients()
+        for client in selected:
+            client.reset_computation()
         print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
         server.broadcast_model(selected)
         
