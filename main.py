@@ -25,7 +25,7 @@ def main():
     NUM_CLIENTS = 10
     NUM_ROUNDS = 100
     BATCH_SIZE = 32
-    LOCAL_EPOCHS = 3
+    LOCAL_EPOCHS = 1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     print(f"Using device: {DEVICE}")
@@ -51,9 +51,9 @@ def main():
             device=DEVICE,
             local_epochs=LOCAL_EPOCHS
         )
-        # Initialize with full computation time
         clients.append(client)
-        print(f"Client {cid}: Full computation time = {client.dt_k:.4f}s")
+        print(f"Client {cid}: {len(client_data_map[cid])} samples | "
+              f"Comp time: {client.dt_k:.4f}s")
     
     # Initialize server
     global_model = CNNMnist().to(DEVICE)
@@ -62,7 +62,7 @@ def main():
         clients=clients,
         V=10.0,               # Lyapunov parameter
         sigma_n=0.1,           # Noise std
-        tau_cm=0.05,           # Comm latency (small but non-zero)
+        tau_cm=0.05,           # Comm latency
         T_max=300,             # Time budget (s)
         E_max=10.0,            # Energy budget
         T_total_rounds=NUM_ROUNDS,
@@ -71,78 +71,108 @@ def main():
     
     # Training loop
     accuracies = []
+    round_durations = []
+    energy_queues = []
     D_t_prev = 0  # Previous round duration
 
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
         print(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
-        # 1. Update client computation states with previous round's duration
+        # 1. Update computation states with previous round duration
         for client in clients:
             client.update_computation_time(D_t_prev)
-            # Print client state for debugging
-            print(f"  Client {client.client_id}: dt_k={client.dt_k:.4f}s, ready={client.ready}")
         
-        # 2. Select clients and allocate power
+        # 2. Select clients and broadcast current model
         selected, power_alloc = server.select_clients()
         print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
+        server.broadcast_model(selected)
         
-        # 3. Compute gradients for selected clients
+        # 3. Compute gradients on selected clients
         for client in selected:
-            # Compute gradient with specified epochs
+            start_comp = time.time()
             client.compute_gradient()
-            print(f"  Client {client.client_id} computed gradient, norm={client.gradient_norm:.4f}")
+            comp_time = time.time() - start_comp
+            print(f"  Client {client.client_id}: "
+                  f"Grad norm={client.gradient_norm:.4f}, "
+                  f"Comp time={comp_time:.2f}s")
         
-        # 4. Determine round duration
+        # 4. Aggregate and update global model
         if selected:
             D_t = max(c.dt_k for c in selected) + server.tau_cm
             aggregated = server.aggregate(selected, power_alloc)
             server.update_model(aggregated)
         else:
             D_t = server.tau_cm
-        
-        print(f"Round duration: {D_t:.4f}s")
+            print("No clients selected - communication only round")
         
         # 5. Update queues and client states
         server.update_queues(selected, power_alloc, D_t)
+        D_t_prev = D_t  # Store for next round
+        round_durations.append(D_t)
         
-        # 6. Store for next round
-        D_t_prev = D_t
-        
-        # 7. Evaluate periodically
+        # 6. Evaluate every 5 rounds
         if (round_idx + 1) % 5 == 0 or round_idx == 0:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
             accuracies.append(acc)
-            print(f"Accuracy: {acc:.2f}%")
+            print(f"Global model accuracy: {acc:.2f}%")
         
-        # 8. Log
+        # 7. Log metrics
         round_time = time.time() - round_start
-        print(f"Wall Clock Time: {round_time:.2f}s | "
-              f"Max Energy Queue: {max(server.Q_e.values()):.2f} | "
-              f"Time Queue: {server.Q_time:.2f}")
+        max_energy_q = max(server.Q_e.values()) if server.Q_e else 0
+        energy_queues.append(max_energy_q)
+        
+        print(f"Round duration: {D_t:.4f}s | "
+              f"Wall time: {round_time:.2f}s | "
+              f"Max energy queue: {max_energy_q:.2f} | "
+              f"Time queue: {server.Q_time:.2f}")
 
-    # Plot results (same as before)
-    # ... [rest of your plotting code]
+    # Final evaluation
+    final_acc = evaluate_model(server.global_model, test_loader, DEVICE)
+    print(f"\n=== Training Complete ===")
+    print(f"Final accuracy: {final_acc:.2f}%")
+    print(f"Average round duration: {np.mean(round_durations):.2f}s")
+    print(f"Max energy queue: {max(energy_queues):.2f}")
 
-    
     # Plot results
-    plt.figure(figsize=(12, 4))
-    plt.subplot(131)
-    plt.plot(accuracies)
-    plt.title("Test Accuracy")
+    plt.figure(figsize=(12, 8))
     
-    plt.subplot(132)
+    # Accuracy plot
+    plt.subplot(221)
+    eval_rounds = [5*i for i in range(len(accuracies))]
+    plt.plot(eval_rounds, accuracies, 'o-')
+    plt.title("Test Accuracy")
+    plt.xlabel("Communication Rounds")
+    plt.ylabel("Accuracy (%)")
+    plt.grid(True)
+    
+    # Client selection
+    plt.subplot(222)
     selected_counts = [len(s) for s in server.selected_history]
     plt.plot(selected_counts)
     plt.title("Selected Clients per Round")
+    plt.xlabel("Rounds")
+    plt.ylabel("Number of Clients")
+    plt.grid(True)
     
-    plt.subplot(133)
-    queue_values = [max(q.values()) for q in server.queue_history]
-    plt.plot(queue_values)
-    plt.title("Max Energy Queue")
+    # Energy queues
+    plt.subplot(223)
+    plt.plot(energy_queues)
+    plt.title("Max Energy Queue Value")
+    plt.xlabel("Rounds")
+    plt.ylabel("Queue Value")
+    plt.grid(True)
+    
+    # Round durations
+    plt.subplot(224)
+    plt.plot(round_durations)
+    plt.title("Round Duration")
+    plt.xlabel("Rounds")
+    plt.ylabel("Time (s)")
+    plt.grid(True)
     
     plt.tight_layout()
-    plt.savefig("results.png")
+    plt.savefig("semi_async_ota_fl_results.png")
     plt.show()
 
 if __name__ == "__main__":
