@@ -40,14 +40,14 @@ class Server:
     def select_clients(self):
         """Greedy client selection with staleness awareness"""
         # Update staleness for non-selected clients from previous round
-        # if self.selected_history:
-        #     last_selected_ids = set(self.selected_history[-1])  # Already contains client IDs
-        # else:
-        #     last_selected_ids = set()
+        if self.selected_history:
+            last_selected_ids = set(self.selected_history[-1])  # Already contains client IDs
+        else:
+            last_selected_ids = set()
         
         for client in self.clients:
-        #     if client.client_id not in last_selected_ids:
-        #         client.increment_staleness()
+            if client.client_id not in last_selected_ids:
+                client.increment_staleness()
             client.set_channel_gain()
             grad_norm = client.gradient_norm if hasattr(client, 'gradient_norm') else 1.0
             client.score = abs(client.h_t_k) / np.sqrt(
@@ -83,72 +83,88 @@ class Server:
         return selected, best_power
 
     def _compute_power(self, selected):
+        """Corrected power allocation (Sec V.A) with numerical stability"""
         c_values = {}
         for client in selected:
-            ck = max(1e-8, self.Q_e[client.client_id] * client.gradient_norm**2 / abs(client.h_t_k)**2)
-            c_values[client.client_id] = ck
+            # Handle division by zero and small values
+            denominator = max(1e-8, abs(client.h_t_k)**2)
+            numerator = self.Q_e[client.client_id] * max(1e-8, client.gradient_norm)**2
+            c_values[client.client_id] = numerator / denominator
         
-        inv_sqrt_c = [1/np.sqrt(c) for c in c_values.values()]
-        total_inv_sqrt = sum(inv_sqrt_c)
+        # Compute sum(1/sqrt(c_k)) with stability
+        inv_sqrt_c_list = [1/np.sqrt(max(1e-8, c)) for c in c_values.values()]
+        inv_sqrt_c_sum = sum(inv_sqrt_c_list)
+        num_clients = len(selected)
         
-        if total_inv_sqrt < 1e-8:
-            return {c.client_id: c.P_max for c in selected}, c_values
+        # Handle case where inv_sqrt_c_sum is near zero
+        if inv_sqrt_c_sum < 1e-8:
+            # Fallback to equal power allocation
+            total_power = (self.V * self.d * self.sigma_n**2 / num_clients)**0.25
+            power_alloc = {
+                client.client_id: min(total_power / num_clients, client.P_max)
+                for client in selected
+            }
+            return power_alloc, c_values
         
-        # CORRECTED power calculation (Eq V.A)
-        t_t = (self.V * self.d * self.sigma_n**2 / (len(selected) * (total_inv_sqrt)**2)) ** 0.25
+        # Regular power calculation
+        total_power = (
+            (self.V * self.d * self.sigma_n**2) / 
+            (num_clients * (inv_sqrt_c_sum)**2)
+        )**0.25
         
         power_alloc = {}
-        for i, client in enumerate(selected):
-            ck = c_values[client.client_id]
-            pk = (1/np.sqrt(ck) / total_inv_sqrt * t_t)
-            power_alloc[client.client_id] = min(pk, client.P_max)
-        
+        for client in selected:
+            c = c_values[client.client_id]
+            power = (1 / np.sqrt(max(1e-8, c))) * total_power
+            power_alloc[client.client_id] = min(power, client.P_max)
+            
         return power_alloc, c_values
 
     def _compute_cost(self, selected, power_alloc, c_values, D_temp):
+        """Drift-plus-penalty cost (Eq. 25) with precomputed c_values"""
         total_power = sum(power_alloc.values())
         
         # Handle case where total_power is near zero
         if total_power < 1e-8:
             alpha_sum = float('inf')
         else:
-            alpha_sum = sum((p/(total_power + 1e-8))**2 for p in power_alloc.values())
+            alpha_sum = sum((p/total_power)**2 for p in power_alloc.values())
         
         # Convergence penalty terms
         convergence_penalty = 1.0 * alpha_sum
-        if total_power > 1e-8:
+        if total_power > 1e-8:  # Avoid division by zero
             convergence_penalty += self.d * self.sigma_n**2 / (total_power**2)
         
-        # Energy cost - FIXED
+        # Energy cost using precomputed c_values
         energy_cost = 0
         for client in selected:
-            # 1. Computation energy (fixed cost when selected)
-            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * client.local_epochs
-            # 2. Communication energy (||s_t^k||^2)
-            E_comm = (power_alloc[client.client_id] * client.gradient_norm / abs(client.h_t_k))**2
-            # 3. Total energy cost with queue weighting
-            energy_cost += self.Q_e[client.client_id] * (E_comp + E_comm)
+            c_val = c_values[client.client_id]
+            p_val = power_alloc[client.client_id]
+            energy_cost += c_val * (p_val**2)
         
         # Time penalty
         time_penalty = self.Q_time * D_temp
-        
+        print('hii ', self.V * convergence_penalty + energy_cost + time_penalty)
         return self.V * convergence_penalty + energy_cost + time_penalty
 
     def aggregate(self, selected, power_alloc):
+        """OTA aggregation with proper compensation (Eq. 4-5)"""
         total_power = sum(power_alloc.values())
-        if total_power < 1e-8:
-            return torch.zeros(self.d, device=self.device)
-        
         aggregated = torch.zeros(self.d, device=self.device)
+        
         for client in selected:
             p = power_alloc[client.client_id]
             h = client.h_t_k
-            compensation = p * np.conj(h) / (abs(h)**2 + 1e-8)
-            aggregated += client.last_gradient * compensation.real
+            # Apply channel compensation
+            compensation = p * np.conj(h) / abs(h)**2
+            scaled_grad = client.last_gradient * compensation.real  # Use real part
+            aggregated += scaled_grad
         
-        # Complex Gaussian noise
-        noise = torch.randn(self.d, device=self.device) * (self.sigma_n / np.sqrt(2))
-        return (aggregated + noise) / total_power
+        # Add complex noise (convert to real for model update)
+        noise_real = torch.randn(self.d, device=self.device) * (self.sigma_n / np.sqrt(2))
+        noise_imag = torch.randn(self.d, device=self.device) * (self.sigma_n / np.sqrt(2))
+        noise = noise_real + 1j*noise_imag
+        return (aggregated + noise.real) / total_power  # Use real part
 
     def update_model(self, update, lr=0.1):
         """Update global model (Eq. 9)"""
@@ -161,15 +177,25 @@ class Server:
         """Update queues with proper energy calculation"""
         for client in selected:
             cid = client.client_id
-            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * client.local_epochs
-            E_comm = (power_alloc[cid] * client.gradient_norm / abs(client.h_t_k))**2
-            # SAME calculation as in _compute_cost
-            energy_increment = E_comp + E_comm - self.E_max[cid]/self.T_total_rounds
+            # Actual computation energy (Sec III.C)
+            # E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * client.local_epochs
+            E_comp = 0.1
+            E_com = (power_alloc[cid] * client.gradient_norm / abs(client.h_t_k))**2
+            energy_increment = E_comp + E_com - self.E_max[cid]/self.T_total_rounds
             self.Q_e[cid] = max(0, self.Q_e[cid] + energy_increment)
-
         
         # Time queue update
         self.Q_time = max(0, self.Q_time + D_t - self.T_max/self.T_total_rounds)
+
+        # for client in self.clients:
+        #     if client in selected:
+        #         # Selected clients start new computation
+        #         client.reset_computation()  # dt_k = full computation time
+        #         client.reset_staleness()  # τ_k = 0
+        #     else:
+        #         # Unselected clients continue computation
+        #         client.update_computation_time(D_t)  # dt_k = max(0, dt_k - D_t)
+        #         client.increment_staleness()  # τ_k += 1
 
         # Record history
         self.selected_history.append([c.client_id for c in selected])

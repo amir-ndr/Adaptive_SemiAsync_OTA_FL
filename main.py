@@ -4,6 +4,7 @@ import time
 from torch.utils.data import DataLoader
 from client import Client
 from server import Server
+# from server2 import Server
 from model import CNNMnist
 from dataloader import load_mnist, partition_mnist_noniid
 import matplotlib.pyplot as plt
@@ -62,9 +63,9 @@ def main():
         clients=clients,
         V=10.0,               # Lyapunov parameter
         sigma_n=0.1,           # Noise std
-        tau_cm=0.05,           # Comm latency
+        tau_cm=0.0,           # Comm latency
         T_max=300,             # Time budget (s)
-        E_max=10.0,            # Energy budget
+        E_max=50.0,            # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
     )
@@ -73,46 +74,72 @@ def main():
     accuracies = []
     round_durations = []
     energy_queues = []
-    D_t_prev = 0  # Previous round duration
+    avg_staleness_per_round = []
+    # Remove D_t_prev since we no longer need it
 
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
         print(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
-        # 1. Update computation states with previous round duration
-        for client in clients:
-            client.update_computation_time(D_t_prev)
+        # REMOVED: Initial computation time update (not needed)
         
-        # 2. Select clients and broadcast current model
+        # 1. Select clients and broadcast current model
         selected, power_alloc = server.select_clients()
-        for client in selected:
-            client.reset_computation()
         print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
-        server.broadcast_model(selected)
+        
+        # 2. Reset staleness for selected clients (computation time reset happens later)
+        for client in selected:
+            client.reset_staleness()    # Reset staleness counter
+        
+        server.broadcast_model(selected)  # Update model
         
         # 3. Compute gradients on selected clients
+        comp_times = []
         for client in selected:
             start_comp = time.time()
             client.compute_gradient()
             comp_time = time.time() - start_comp
-            print(f"  Client {client.client_id}: "
-                  f"Grad norm={client.gradient_norm:.4f}, "
-                  f"Comp time={comp_time:.2f}s")
+            comp_times.append(comp_time)
+            print(f"  Client {client.client_id}: Grad norm={client.gradient_norm:.4f}, Comp time={comp_time:.2f}s")
         
-        # 4. Aggregate and update global model
+        # 4. Calculate round duration and aggregate
         if selected:
-            D_t = max(c.dt_k for c in selected) + server.tau_cm
+            # Get max computation time from actual execution
+            max_comp_time = max(comp_times)
+            D_t = max_comp_time + server.tau_cm
             aggregated = server.aggregate(selected, power_alloc)
             server.update_model(aggregated)
         else:
             D_t = server.tau_cm
             print("No clients selected - communication only round")
         
-        # 5. Update queues and client states
+        # 5. Update queues (energy/time)
         server.update_queues(selected, power_alloc, D_t)
-        D_t_prev = D_t  # Store for next round
-        round_durations.append(D_t)
         
+        # 6. Update computation time and staleness for ALL clients
+        for client in clients:
+            if client in selected:
+                # Selected clients: reset to FULL computation time for NEXT round
+                client.dt_k = client._full_computation_time()
+            else:
+                # Non-selected clients: subtract current round duration
+                client.dt_k = max(0, client.dt_k - D_t)
+                client.increment_staleness()
+        
+        # 7. Record metrics
+        current_avg_staleness = np.mean([client.tau_k for client in clients])
+        avg_staleness_per_round.append(current_avg_staleness)
+        print(f"Avg Staleness={current_avg_staleness:.2f}")
+        round_durations.append(D_t)
+            
+        total_energy = 0
+        for client in selected:
+            comp_energy = client.mu_k * client.fk**2 * client.C * client.Ak
+            # comp_energy = 0.1
+            comm_energy = (power_alloc[client.client_id] * client.gradient_norm / abs(client.h_t_k))**2
+            total_energy += comp_energy + comm_energy
+        print(f"Round energy: {total_energy:.2f} J")
+
         # 6. Evaluate every 5 rounds
         if (round_idx + 1) % 5 == 0 or round_idx == 0:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
@@ -137,44 +164,52 @@ def main():
     print(f"Max energy queue: {max(energy_queues):.2f}")
 
     # Plot results
-    plt.figure(figsize=(12, 8))
-    
-    # Accuracy plot
-    plt.subplot(221)
+    plt.figure(figsize=(15, 12))  # Increase figure size for 6 plots
+
+# Accuracy plot
+    plt.subplot(321)
     eval_rounds = [5*i for i in range(len(accuracies))]
     plt.plot(eval_rounds, accuracies, 'o-')
     plt.title("Test Accuracy")
     plt.xlabel("Communication Rounds")
     plt.ylabel("Accuracy (%)")
     plt.grid(True)
-    
+
     # Client selection
-    plt.subplot(222)
+    plt.subplot(322)
     selected_counts = [len(s) for s in server.selected_history]
     plt.plot(selected_counts)
     plt.title("Selected Clients per Round")
     plt.xlabel("Rounds")
     plt.ylabel("Number of Clients")
     plt.grid(True)
-    
+
     # Energy queues
-    plt.subplot(223)
+    plt.subplot(323)
     plt.plot(energy_queues)
     plt.title("Max Energy Queue Value")
     plt.xlabel("Rounds")
     plt.ylabel("Queue Value")
     plt.grid(True)
-    
+
     # Round durations
-    plt.subplot(224)
+    plt.subplot(324)
     plt.plot(round_durations)
     plt.title("Round Duration")
     plt.xlabel("Rounds")
     plt.ylabel("Time (s)")
     plt.grid(True)
-    
-    plt.tight_layout()
-    plt.savefig("semi_async_ota_fl_results.png")
+
+    # Average staleness
+    plt.subplot(325)
+    plt.plot(avg_staleness_per_round, 'b-')
+    plt.title("Average Client Staleness")
+    plt.xlabel("Rounds")
+    plt.ylabel("Staleness (rounds)")
+    plt.grid(True)
+
+    plt.tight_layout(pad=3.0)  # Add padding between subplots
+    plt.savefig("semi_async_ota_fl_results.png", dpi=300)  # Higher resolution
     plt.show()
 
 if __name__ == "__main__":
