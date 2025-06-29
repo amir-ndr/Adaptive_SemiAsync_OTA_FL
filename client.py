@@ -77,38 +77,33 @@ class Client:
         
         return True
 
-    # def compute_gradient(self):
-    #     """Compute gradient using stale model (paper: Sec III.B)"""
-    #     self.local_model.load_state_dict(self.stale_model.state_dict())
-        
-    #     # Sample a single mini-batch
-    #     indices = np.random.choice(self.data_indices, size=self.Ak, replace=False)
-    #     batch = [self.train_dataset[i] for i in indices]
-    #     images = torch.stack([item[0] for item in batch]).to(self.device)
-    #     labels = torch.tensor([item[1] for item in batch]).to(self.device)
-        
-    #     # Zero gradients
-    #     self.local_model.zero_grad()
-        
-    #     # Forward and backward pass
-    #     outputs = self.local_model(images)
-    #     loss = torch.nn.functional.cross_entropy(outputs, labels)
-    #     loss.backward()
-        
-    #     # Clip gradients (critical for stability)
-    #     # torch.nn.utils.clip_grad_norm_(self.local_model.parameters(), max_norm=2.0)
-        
-    #     # Extract gradients
-    #     gradient = [param.grad.clone().view(-1) for param in self.local_model.parameters()]
-    #     flat_gradient = torch.cat(gradient)
-        
-    #     self.last_gradient = flat_gradient
-    #     self.gradient_norm = torch.norm(flat_gradient).item()
-    #     print('norm: ', self.gradient_norm)
-        
-    #     return True
-
     def compute_gradient(self):
+        """Compute gradient using stale model (Sec III.B)"""
+        start_time = time.time()
+        self.local_model.load_state_dict(self.stale_model.state_dict())
+        
+        # Sample a single mini-batch
+        indices = np.random.choice(self.data_indices, size=self.Ak, replace=False)
+        batch = [self.train_dataset[i] for i in indices]
+        images = torch.stack([item[0] for item in batch]).to(self.device)
+        labels = torch.tensor([item[1] for item in batch]).to(self.device)
+        
+        # Forward and backward pass
+        self.local_model.zero_grad()
+        outputs = self.local_model(images)
+        loss = torch.nn.functional.cross_entropy(outputs, labels)
+        loss.backward()
+        
+        # Extract and flatten gradients
+        gradients = [param.grad.clone().view(-1) for param in self.local_model.parameters()]
+        flat_gradient = torch.cat(gradients)
+        
+        self.last_gradient = flat_gradient
+        self.gradient_norm = torch.norm(flat_gradient).item()
+        self.actual_comp_time = time.time() - start_time
+        return True
+
+    def compute_gradient_mul(self):
         """Compute average gradient over multiple local iterations"""
         start_time = time.time()
         self.local_model.load_state_dict(self.stale_model.state_dict())

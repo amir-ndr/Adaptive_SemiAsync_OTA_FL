@@ -39,15 +39,7 @@ class Server:
     
     def select_clients(self):
         """Greedy client selection with staleness awareness"""
-        # Update staleness for non-selected clients from previous round
-        # if self.selected_history:
-        #     last_selected_ids = set(self.selected_history[-1])  # Already contains client IDs
-        # else:
-        #     last_selected_ids = set()
-        
         for client in self.clients:
-        #     if client.client_id not in last_selected_ids:
-        #         client.increment_staleness()
             client.set_channel_gain()
             grad_norm = client.gradient_norm if hasattr(client, 'gradient_norm') else 1.0
             client.score = abs(client.h_t_k) / np.sqrt(
@@ -61,8 +53,11 @@ class Server:
         best_cost = float('inf')
         best_power = {}
         best_c_values = {}  # Store best c_values for cost calculation
-        
+        MAX_STALENESS = 7
+
         for client in sorted_clients:
+            if client.tau_k > MAX_STALENESS:
+                continue  # Skip overly stale clients
             candidate_set = selected + [client]
             power_alloc, c_values = self._compute_power(candidate_set)  # Get c_values
             if not power_alloc: 
@@ -95,12 +90,13 @@ class Server:
             return {c.client_id: c.P_max for c in selected}, c_values
         
         # CORRECTED power calculation (Eq V.A)
-        t_t = (self.V * self.d * self.sigma_n**2 / (len(selected) * (total_inv_sqrt)**2)) ** 0.25
+        S_t = (self.V * self.d * self.sigma_n**2 / (len(selected) * (total_inv_sqrt)**2)) ** 0.25
         
         power_alloc = {}
         for i, client in enumerate(selected):
             ck = c_values[client.client_id]
-            pk = (1/np.sqrt(ck) / total_inv_sqrt * t_t)
+            pk = (1/np.sqrt(ck) / total_inv_sqrt * S_t)
+            # print('power: ', pk)
             power_alloc[client.client_id] = min(pk, client.P_max)
         
         return power_alloc, c_values
@@ -143,7 +139,7 @@ class Server:
         for client in selected:
             p = power_alloc[client.client_id]
             h = client.h_t_k
-            compensation = p * np.conj(h) / (abs(h)**2 + 1e-8)
+            compensation = p * np.conj(h) / (abs(h)**2)
             aggregated += client.last_gradient * compensation.real
         
         # Complex Gaussian noise
@@ -167,7 +163,6 @@ class Server:
             energy_increment = E_comp + E_comm - self.E_max[cid]/self.T_total_rounds
             self.Q_e[cid] = max(0, self.Q_e[cid] + energy_increment)
 
-        
         # Time queue update
         self.Q_time = max(0, self.Q_time + D_t - self.T_max/self.T_total_rounds)
 

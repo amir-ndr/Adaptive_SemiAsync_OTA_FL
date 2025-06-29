@@ -61,7 +61,7 @@ def main():
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=10.0,               # Lyapunov parameter
+        V=30.0,               # Lyapunov parameter
         sigma_n=0.1,           # Noise std
         tau_cm=0.0,           # Comm latency
         T_max=300,             # Time budget (s)
