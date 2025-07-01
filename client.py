@@ -3,14 +3,19 @@ import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 import copy
 import time
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Client:
     def __init__(self, client_id, data_indices, model, fk, mu_k, P_max, C, Ak, 
                  train_dataset, device='cpu', local_epochs=1):
         self.client_id = client_id
         self.data_indices = data_indices
-        self.stale_model = copy.deepcopy(model).to(device)  # Stale global model
-        self.local_model = copy.deepcopy(model).to(device)  # For local training
+        self.stale_model = copy.deepcopy(model).to(device)
+        self.local_model = copy.deepcopy(model).to(device)
         self.fk = fk
         self.mu_k = mu_k
         self.P_max = P_max
@@ -21,89 +26,78 @@ class Client:
         self.local_epochs = local_epochs
         
         # State variables
-        self.dt_k = self._full_computation_time()  # Initial computation time
-        self.tau_k = 0  # Staleness counter
+        self.dt_k = self._full_computation_time()
+        self.tau_k = 0
         self.last_gradient = None
-        self.gradient_norm = 0
-        self.h_t_k = None  # Current channel gain
-        self.ready = (self.dt_k <= 0)  # Ready if computation complete
+        self.gradient_norm = 1.0
+        self.h_t_k = None
+        self.ready = (self.dt_k <= 0)
+
+        logger.info(f"Client {client_id} initialized | "
+                    f"CPU: {fk/1e9:.2f} GHz | "
+                    f"Batch: {Ak} samples | "
+                    f"Comp Time: {self.dt_k:.4f}s")
 
     def _full_computation_time(self):
         return (self.C * self.Ak * self.local_epochs) / self.fk
 
-
     def update_stale_model(self, model_state_dict):
-        """Update stale model from server (Sec III.B)"""
         self.stale_model.load_state_dict(model_state_dict)
-        self.local_model.load_state_dict(model_state_dict)  # Sync local model
-        self.tau_k = 0  # Reset staleness counter
-        # self.reset_computation()  # Reset computation time
+        self.local_model.load_state_dict(model_state_dict)
+        self.tau_k = 0
+        logger.debug(f"Client {self.client_id}: Model updated | "
+                     f"Staleness reset to 0")
 
-    def compute_gradient_multiple(self):
-        """Compute gradient using stale model w^{t-τ_t^k}"""
-        # Start from stale model version
+    def compute_gradient(self):
+        start_time = time.time()
         self.local_model.load_state_dict(self.stale_model.state_dict())
-        initial_weights = [param.clone().detach() for param in self.local_model.parameters()]
         
-        # Create DataLoader for local data
+        # Create DataLoader for entire local dataset
         dataset = [self.train_dataset[i] for i in self.data_indices]
         images = torch.stack([item[0] for item in dataset])
         labels = torch.tensor([item[1] for item in dataset])
         data_loader = DataLoader(TensorDataset(images, labels), 
                                 batch_size=self.Ak, shuffle=True)
         
-        # Create optimizer
-        optimizer = torch.optim.SGD(self.local_model.parameters(), lr=0.01)
+        total_gradient = None
+        total_samples = 0
         
-        # Run local training
-        for epoch in range(self.local_epochs):
-            for batch in data_loader:
-                images, labels = batch[0].to(self.device), batch[1].to(self.device)
-                optimizer.zero_grad()
-                outputs = self.local_model(images)
-                loss = torch.nn.functional.cross_entropy(outputs, labels)
-                loss.backward()
-                optimizer.step()
-        
-        # Compute delta (w^{t-τ_t^k} - w_local)
-        with torch.no_grad():
-            gradient = []
-            for init, current in zip(initial_weights, self.local_model.parameters()):
-                gradient.append((init - current).view(-1))
+        for batch in data_loader:
+            batch_images, batch_labels = batch[0].to(self.device), batch[1].to(self.device)
             
-            flat_gradient = torch.cat(gradient)
-            self.last_gradient = flat_gradient
-            self.gradient_norm = torch.norm(flat_gradient).item()
+            # Forward pass
+            self.local_model.zero_grad()
+            outputs = self.local_model(batch_images)
+            loss = torch.nn.functional.cross_entropy(outputs, batch_labels)
+            
+            # Backward pass
+            loss.backward()
+            
+            # Accumulate gradients
+            with torch.no_grad():
+                batch_gradient = []
+                for param in self.local_model.parameters():
+                    batch_gradient.append(param.grad.clone().view(-1))
+                flat_batch_grad = torch.cat(batch_gradient)
+                
+                if total_gradient is None:
+                    total_gradient = flat_batch_grad
+                else:
+                    total_gradient += flat_batch_grad
+                    
+                total_samples += batch_images.size(0)
         
+        # Compute average gradient
+        avg_gradient = total_gradient / total_samples
+        self.last_gradient = avg_gradient
+        self.gradient_norm = torch.norm(avg_gradient).item()
+        
+        logger.info(f"Client {self.client_id}: Gradient computed | "
+                    f"Norm: {self.gradient_norm:.4f} | "
+                    f"Batches: {len(data_loader)}")
         return True
 
-    def compute_gradient(self):
-        """Compute gradient using stale model (Sec III.B)"""
-        start_time = time.time()
-        self.local_model.load_state_dict(self.stale_model.state_dict())
-        
-        # Sample a single mini-batch
-        indices = np.random.choice(self.data_indices, size=self.Ak, replace=False)
-        batch = [self.train_dataset[i] for i in indices]
-        images = torch.stack([item[0] for item in batch]).to(self.device)
-        labels = torch.tensor([item[1] for item in batch]).to(self.device)
-        
-        # Forward and backward pass
-        self.local_model.zero_grad()
-        outputs = self.local_model(images)
-        loss = torch.nn.functional.cross_entropy(outputs, labels)
-        loss.backward()
-        
-        # Extract and flatten gradients
-        gradients = [param.grad.clone().view(-1) for param in self.local_model.parameters()]
-        flat_gradient = torch.cat(gradients)
-        
-        self.last_gradient = flat_gradient
-        self.gradient_norm = torch.norm(flat_gradient).item()
-        self.actual_comp_time = time.time() - start_time
-        return True
-
-    def compute_gradient_mul(self):
+    def compute_gradient_(self):
         """Compute average gradient over multiple local iterations"""
         start_time = time.time()
         self.local_model.load_state_dict(self.stale_model.state_dict())
@@ -142,26 +136,32 @@ class Client:
         return True
 
     def update_computation_time(self, D_t):
-        """Update remaining computation time (Eq. 21c)"""
         self.dt_k = max(0, self.dt_k - D_t)
         self.ready = (self.dt_k <= 0)
+        logger.debug(f"Client {self.client_id}: Comp time updated | "
+                     f"Remaining: {self.dt_k:.4f}s | "
+                     f"Ready: {self.ready}")
         return self.ready
 
     def reset_computation(self):
-        """Reset computation time when selected"""
         self.dt_k = self._full_computation_time()
         self.ready = (self.dt_k <= 0)
+        logger.debug(f"Client {self.client_id}: Comp time reset | "
+                     f"New: {self.dt_k:.4f}s")
 
     def increment_staleness(self):
-        """Increment staleness counter when not selected"""
         self.tau_k += 1
+        logger.debug(f"Client {self.client_id}: Staleness incremented | "
+                     f"New: {self.tau_k}")
 
     def set_channel_gain(self):
-        """Simulate Rayleigh fading channel"""
         gain = complex(np.random.normal(0, 1), np.random.normal(0, 1))
-        self.h_t_k = gain / np.sqrt(2)  # Normalized complex gain
-        return abs(self.h_t_k)
+        self.h_t_k = gain / np.sqrt(2)
+        channel_mag = abs(self.h_t_k)
+        logger.debug(f"Client {self.client_id}: Channel set | "
+                     f"|h|: {channel_mag:.4f}")
+        return channel_mag
     
     def reset_staleness(self):
-        """Reset staleness counter after selection (paper: Sec III.B)"""
-        self.tau_k = 0  # Reset staleness
+        self.tau_k = 0
+        logger.debug(f"Client {self.client_id}: Staleness reset to 0")

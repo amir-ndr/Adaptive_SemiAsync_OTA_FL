@@ -8,6 +8,7 @@ from server import Server
 from model import CNNMnist
 from dataloader import load_mnist, partition_mnist_noniid
 import matplotlib.pyplot as plt
+import logging
 
 def evaluate_model(model, test_loader, device='cpu'):
     model.eval()
@@ -22,6 +23,18 @@ def evaluate_model(model, test_loader, device='cpu'):
     return 100 * correct / total
 
 def main():
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler("fl_system.log"),
+            logging.StreamHandler()
+        ]
+    )
+    logger = logging.getLogger(__name__)
+    logger.info("Starting FL simulation")
+
     # Parameters
     NUM_CLIENTS = 10
     NUM_ROUNDS = 100
@@ -45,7 +58,7 @@ def main():
             model=CNNMnist(),
             fk=np.random.uniform(1e9, 2e9),  # 1-2 GHz CPU
             mu_k=1e-27,                      # Energy coefficient
-            P_max=1.0,                       # Max transmit power
+            P_max=2.0 + np.random.rand(),                       # Max transmit power
             C=1e6,                           # FLOPs per sample
             Ak=BATCH_SIZE,                   # Batch size
             train_dataset=train_dataset,
@@ -56,16 +69,21 @@ def main():
         print(f"Client {cid}: {len(client_data_map[cid])} samples | "
               f"Comp time: {client.dt_k:.4f}s")
     
+    E_max_dict = {cid: np.random.uniform(30, 70) for cid in range(NUM_CLIENTS)}
+    print("Client Energy Budgets:")
+    for cid, budget in E_max_dict.items():
+        print(f"  Client {cid}: {budget:.2f} J")
+
     # Initialize server
     global_model = CNNMnist().to(DEVICE)
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=30.0,               # Lyapunov parameter
-        sigma_n=0.1,           # Noise std
-        tau_cm=0.0,           # Comm latency
-        T_max=300,             # Time budget (s)
-        E_max=50.0,            # Energy budget
+        V=25.0,               # Lyapunov parameter
+        sigma_n=0.01,           # Noise std
+        tau_cm=0.01,           # Comm latency
+        T_max=200,             # Time budget (s)
+        E_max=E_max_dict,            # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
     )
@@ -88,10 +106,9 @@ def main():
         print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
         
         # 2. Reset staleness for selected clients (computation time reset happens later)
+        server.broadcast_model(selected)  # Update model first
         for client in selected:
-            client.reset_staleness()    # Reset staleness counter
-        
-        server.broadcast_model(selected)  # Update model
+            client.reset_staleness()  # Update model
         
         # 3. Compute gradients on selected clients
         comp_times = []
