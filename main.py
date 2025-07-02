@@ -4,7 +4,6 @@ import time
 from torch.utils.data import DataLoader
 from client import Client
 from server import Server
-# from server2 import Server
 from model import CNNMnist
 from dataloader import load_mnist, partition_mnist_noniid
 import matplotlib.pyplot as plt
@@ -23,7 +22,6 @@ def evaluate_model(model, test_loader, device='cpu'):
     return 100 * correct / total
 
 def main():
-
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -52,13 +50,19 @@ def main():
     # Initialize clients
     clients = []
     for cid in range(NUM_CLIENTS):
+        # Ensure client has at least 1 sample
+        indices = client_data_map[cid]
+        if len(indices) == 0:
+            indices = [0]  # Add dummy index to prevent errors
+            logger.warning(f"Client {cid} has no data! Adding dummy sample")
+        
         client = Client(
             client_id=cid,
-            data_indices=client_data_map[cid],
+            data_indices=indices,
             model=CNNMnist(),
             fk=np.random.uniform(1e9, 2e9),  # 1-2 GHz CPU
             mu_k=1e-27,                      # Energy coefficient
-            P_max=2.0 + np.random.rand(),                       # Max transmit power
+            P_max=2.0 + np.random.rand(),     # Max transmit power
             C=1e6,                           # FLOPs per sample
             Ak=BATCH_SIZE,                   # Batch size
             train_dataset=train_dataset,
@@ -80,10 +84,10 @@ def main():
         global_model=global_model,
         clients=clients,
         V=25.0,               # Lyapunov parameter
-        sigma_n=0.01,           # Noise std
+        sigma_n=0.01,          # Noise std
         tau_cm=0.01,           # Comm latency
         T_max=200,             # Time budget (s)
-        E_max=E_max_dict,            # Energy budget
+        E_max=E_max_dict,      # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
     )
@@ -93,7 +97,7 @@ def main():
     round_durations = []
     energy_queues = []
     avg_staleness_per_round = []
-    # Remove D_t_prev since we no longer need it
+    selected_counts = []  # Track number of selected clients per round
 
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
@@ -101,8 +105,12 @@ def main():
         
         # 1. Select clients and broadcast current model
         selected, power_alloc = server.select_clients()
-        print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
-        server.broadcast_model(selected)  # Update model FIRST
+        selected_ids = [c.client_id for c in selected]
+        selected_counts.append(len(selected))
+        print(f"Selected {len(selected)} clients: {selected_ids}")
+        
+        # Broadcast model to selected clients
+        server.broadcast_model(selected)
         
         # 2. Compute gradients on selected clients
         comp_times = []
@@ -115,7 +123,7 @@ def main():
                   f"Grad norm={client.gradient_norm:.4f}, "
                   f"Actual comp={comp_time:.4f}s")
         
-        # 3. Reset staleness AFTER computation
+        # 3. Reset staleness AFTER computation (as in your previous version)
         for client in selected:
             client.reset_staleness()
         
@@ -161,19 +169,21 @@ def main():
         print(f"Round duration: {D_t:.4f}s | "
               f"Wall time: {round_time:.2f}s | "
               f"Max energy queue: {max_energy_q:.2f} | "
-              f"Time queue: {server.Q_time:.2f}")
+              f"Time queue: {server.Q_time:.2f} | "
+              f"Avg staleness: {current_avg_staleness:.2f}")
 
     # Final evaluation
     final_acc = evaluate_model(server.global_model, test_loader, DEVICE)
+    accuracies.append(final_acc)
     print(f"\n=== Training Complete ===")
     print(f"Final accuracy: {final_acc:.2f}%")
     print(f"Average round duration: {np.mean(round_durations):.2f}s")
     print(f"Max energy queue: {max(energy_queues):.2f}")
 
     # Plot results
-    plt.figure(figsize=(15, 12))  # Increase figure size for 6 plots
-
-# Accuracy plot
+    plt.figure(figsize=(15, 12))
+    
+    # Accuracy plot
     plt.subplot(321)
     eval_rounds = [5*i for i in range(len(accuracies))]
     plt.plot(eval_rounds, accuracies, 'o-')
@@ -184,7 +194,6 @@ def main():
 
     # Client selection
     plt.subplot(322)
-    selected_counts = [len(s) for s in server.selected_history]
     plt.plot(selected_counts)
     plt.title("Selected Clients per Round")
     plt.xlabel("Rounds")
@@ -214,9 +223,17 @@ def main():
     plt.xlabel("Rounds")
     plt.ylabel("Staleness (rounds)")
     plt.grid(True)
+    
+    # Energy consumption
+    plt.subplot(326)
+    plt.hist([server.Q_e[cid] for cid in range(NUM_CLIENTS)], bins=20)
+    plt.title("Final Energy Queue Distribution")
+    plt.xlabel("Energy Queue Value")
+    plt.ylabel("Number of Clients")
+    plt.grid(True)
 
-    plt.tight_layout(pad=3.0)  # Add padding between subplots
-    plt.savefig("semi_async_ota_fl_results.png", dpi=300)  # Higher resolution
+    plt.tight_layout(pad=3.0)
+    plt.savefig("semi_async_ota_fl_results.png", dpi=300)
     plt.show()
 
 if __name__ == "__main__":
