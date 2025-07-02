@@ -99,71 +99,61 @@ def main():
         round_start = time.time()
         print(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
-        # REMOVED: Initial computation time update (not needed)
-        
         # 1. Select clients and broadcast current model
         selected, power_alloc = server.select_clients()
         print(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
+        server.broadcast_model(selected)  # Update model FIRST
         
-        # 2. Reset staleness for selected clients (computation time reset happens later)
-        server.broadcast_model(selected)  # Update model first
-        for client in selected:
-            client.reset_staleness()  # Update model
-        
-        # 3. Compute gradients on selected clients
+        # 2. Compute gradients on selected clients
         comp_times = []
         for client in selected:
             start_comp = time.time()
             client.compute_gradient()
             comp_time = time.time() - start_comp
             comp_times.append(comp_time)
-            print(f"  Client {client.client_id}: Grad norm={client.gradient_norm:.4f}, Comp time={comp_time:.2f}s")
+            print(f"  Client {client.client_id}: "
+                  f"Grad norm={client.gradient_norm:.4f}, "
+                  f"Actual comp={comp_time:.4f}s")
+        
+        # 3. Reset staleness AFTER computation
+        for client in selected:
+            client.reset_staleness()
         
         # 4. Calculate round duration and aggregate
+        max_comp_time = max(comp_times) if selected else 0
+        D_t = max_comp_time + server.tau_cm
+        
         if selected:
-            # Get max computation time from actual execution
-            max_comp_time = max(comp_times)
-            D_t = max_comp_time + server.tau_cm
             aggregated = server.aggregate(selected, power_alloc)
-            server.update_model(aggregated)
+            server.update_model(aggregated, round_idx)  # Pass round index for LR decay
         else:
-            D_t = server.tau_cm
             print("No clients selected - communication only round")
         
-        # 5. Update queues (energy/time)
+        # 5. Update queues
         server.update_queues(selected, power_alloc, D_t)
         
-        # 6. Update computation time and staleness for ALL clients
+        # 6. Update computation time for ALL clients
         for client in clients:
             if client in selected:
-                # Selected clients: reset to FULL computation time for NEXT round
-                client.dt_k = client._full_computation_time()
+                # Reset for next round (new model)
+                client.reset_computation()
             else:
-                # Non-selected clients: subtract current round duration
+                # Progress computation
                 client.dt_k = max(0, client.dt_k - D_t)
                 client.increment_staleness()
         
-        # 7. Record metrics
+        # 7. Record metrics and evaluate
         current_avg_staleness = np.mean([client.tau_k for client in clients])
         avg_staleness_per_round.append(current_avg_staleness)
-        print(f"Avg Staleness={current_avg_staleness:.2f}")
         round_durations.append(D_t)
-            
-        total_energy = 0
-        for client in selected:
-            comp_energy = client.mu_k * client.fk**2 * client.C * client.Ak
-            # comp_energy = 0.1
-            comm_energy = (power_alloc[client.client_id] * client.gradient_norm / abs(client.h_t_k))**2
-            total_energy += comp_energy + comm_energy
-        print(f"Round energy: {total_energy:.2f} J")
-
-        # 6. Evaluate every 5 rounds
+        
+        # Evaluate every 5 rounds
         if (round_idx + 1) % 5 == 0 or round_idx == 0:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
             accuracies.append(acc)
             print(f"Global model accuracy: {acc:.2f}%")
         
-        # 7. Log metrics
+        # Log round metrics
         round_time = time.time() - round_start
         max_energy_q = max(server.Q_e.values()) if server.Q_e else 0
         energy_queues.append(max_energy_q)

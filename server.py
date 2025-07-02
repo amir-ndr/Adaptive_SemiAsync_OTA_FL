@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import copy
 import logging
+import math
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -82,7 +83,8 @@ class Server:
         best_cost = float('inf')
         
         for client in sorted_clients:
-            cost_k = self._approx_cost(client, selected)
+            candidate_set = selected + [client]
+            cost_k = self._exact_cost(candidate_set)
             if cost_k < best_cost:
                 selected.append(client)
                 best_cost = cost_k
@@ -94,76 +96,81 @@ class Server:
                 break
         
         # Compute power allocation
-        power_alloc, c_values = self._compute_power(selected)
+        power_alloc = self._compute_power(selected)
         
         logger.info(f"Selected {len(selected)} clients: {[c.client_id for c in selected]}")
         for client in selected:
             logger.info(f"  Client {client.client_id} | "
-                        f"Power: {power_alloc[client.client_id]:.4f} | "
-                        f"c_k: {c_values[client.client_id]:.4e} | "
+                        f"Power: {power_alloc.get(client.client_id, 0):.4f} | "
                         f"Score: {client.score:.4e}")
         
         return selected, power_alloc
 
-    def _approx_cost(self, candidate, current_set):
-        candidate_set = current_set + [candidate]
+    def _exact_cost(self, candidate_set):
+        """Calculate exact drift-plus-penalty cost for candidate set"""
+        if not candidate_set:
+            return float('inf')
+            
         n = len(candidate_set)
+        power_alloc = self._compute_power(candidate_set)
+        total_power = sum(power_alloc.values())
         
         # Convergence penalty
-        conv_penalty = 1.0 / n
-        avg_pmax = sum(c.P_max for c in candidate_set) / n
-        conv_penalty += self.d * self.sigma_n**2 / (avg_pmax**2 * n**2 + 1e-8)
+        conv_penalty = 0
+        if total_power > 1e-8:
+            # Calculate actual α values
+            alphas = {cid: p/total_power for cid, p in power_alloc.items()}
+            conv_penalty = self.V * sum(alpha**2 for alpha in alphas.values()) 
+            conv_penalty += self.V * self.d * self.sigma_n**2 / total_power**2
         
         # Energy cost
         energy_cost = 0
         for client in candidate_set:
+            cid = client.client_id
+            # Transmission energy based on allocated power
+            E_comm = (power_alloc[cid] * client.gradient_norm / abs(client.h_t_k))**2
             E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * client.local_epochs
-            # E_comp = 0.05
-            E_comm = (client.P_max * client.gradient_norm / abs(client.h_t_k))**2
-            energy_cost += self.Q_e[client.client_id] * (E_comp + E_comm)
+            energy_cost += self.Q_e[cid] * (E_comp + E_comm)
         
         # Time penalty
         D_temp = max(c.dt_k for c in candidate_set) + self.tau_cm
         
-        total_cost = self.V * conv_penalty + energy_cost + self.Q_time * D_temp
-        return total_cost
+        return conv_penalty + energy_cost + self.Q_time * D_temp
 
     def _compute_power(self, selected):
+        """Compute optimal power allocation for selected clients"""
         if not selected:
-            return {}, {}
-
+            return {}
+        
         n = len(selected)
         c_values = {}
         
+        # Calculate c_k = Q_e[k] * ||g_k||^2 / |h_k|^2
         for client in selected:
-            normalized_grad_norm = client.gradient_norm**2 / self.d
-            ck = max(1e-8, self.Q_e[client.client_id] * normalized_grad_norm / abs(client.h_t_k)**2)
-            c_values[client.client_id] = ck
+            cid = client.client_id
+            ck = self.Q_e[cid] * client.gradient_norm**2 / (abs(client.h_t_k)**2 + 1e-8)
+            c_values[cid] = max(ck, 1e-8)  # Avoid zero
         
         weights = [1/np.sqrt(c) for c in c_values.values()]
         total_weight = sum(weights)
         
-        # Handle near-zero weights - ADDED FALLBACK
+        # Handle near-zero weights
         if total_weight < 1e-8:
             # Equal power allocation fallback
-            power_alloc = {client.client_id: min(1.0, client.P_max) for client in selected}
-            logger.warning("Total weight near zero - using equal power allocation")
-            return power_alloc, c_values
+            return {client.client_id: min(0.1, client.P_max) for client in selected}
         
         # Optimize total power
-        S_t = (self.V * self.sigma_n**2 * total_weight**2 / n) ** 0.25
+        base = (self.V * self.d * self.sigma_n**2 * total_weight**2) / n
+        S_t = base ** 0.25
         
-        # REMOVED SOFTMAX SCALING - CAUSES OVER-AMPLIFICATION
+        # Allocate power proportionally
         power_alloc = {}
-        for i, client in enumerate(selected):
-            pk = weights[i] / total_weight * S_t
-            power_alloc[client.client_id] = min(pk, client.P_max)
+        for client in selected:
+            cid = client.client_id
+            pk = (1/np.sqrt(c_values[cid]) / total_weight * S_t)
+            power_alloc[cid] = min(pk, client.P_max)
         
-        logger.debug(f"Power allocation | "
-                    f"Total S_t: {S_t:.4f} | "
-                    f"Total weight: {total_weight:.4e} | "
-                    f"n: {n}")
-        return power_alloc, c_values
+        return power_alloc
 
     def aggregate(self, selected, power_alloc):
         total_power = sum(power_alloc.values())
@@ -173,13 +180,13 @@ class Server:
         
         aggregated = torch.zeros(self.d, device=self.device)
         for client in selected:
-            p = power_alloc[client.client_id]
-            h = client.h_t_k
+            cid = client.client_id
+            # Apply staleness discount
             staleness_factor = 0.9 ** client.tau_k
-            compensation = p * np.conj(h) / (abs(h)**2)
-            aggregated += client.last_gradient * compensation.real #* staleness_factor
+            # Simple aggregation without complex precoding
+            aggregated += client.last_gradient * power_alloc[cid] * staleness_factor
         
-        # Add noise
+        # Add and scale noise
         noise = torch.randn(self.d, device=self.device) * self.sigma_n
         result = (aggregated + noise) / total_power
         
@@ -189,7 +196,11 @@ class Server:
                     f"Update norm: {torch.norm(result).item():.4f}")
         return result
 
-    def update_model(self, update, lr=0.3):
+    def update_model(self, update, round_idx):
+        """Update global model with decaying learning rate"""
+        # Decaying learning rate
+        lr = 0.1 * (0.95 ** (round_idx // 10))
+        
         with torch.no_grad():
             params = torch.nn.utils.parameters_to_vector(self.global_model.parameters())
             prev_norm = torch.norm(params).item()
@@ -198,6 +209,7 @@ class Server:
             torch.nn.utils.vector_to_parameters(params, self.global_model.parameters())
             
             logger.info(f"Model updated | "
+                        f"LR: {lr:.4f} | "
                         f"Param change: {prev_norm - new_norm:.4e} | "
                         f"New norm: {new_norm:.4f}")
 
@@ -209,10 +221,14 @@ class Server:
         # Update energy queues
         for client in selected:
             cid = client.client_id
-            E_comm = (power_alloc[cid] * client.gradient_norm / abs(client.h_t_k))**2
-            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * client.local_epochs
-            # E_comp = 0.05
-            energy_increment = E_comp + E_comm - self.E_max[cid]/self.T_total_rounds
+            # Compute actual transmission energy
+            E_comm = (power_alloc[cid])**2 * client.gradient_norm**2 / (abs(client.h_t_k)**2 + 1e-8)
+            # Use actual computation time
+            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * (client.actual_comp_time * client.fk / (client.C * client.Ak))
+            
+            # Per-round energy budget
+            per_round_budget = self.E_max[cid] / self.T_total_rounds
+            energy_increment = E_comp + E_comm - per_round_budget
             
             prev_q = self.Q_e[cid]
             self.Q_e[cid] = max(0, self.Q_e[cid] + energy_increment)
@@ -224,7 +240,8 @@ class Server:
                          f"Q_e: {prev_q:.2f} → {self.Q_e[cid]:.2f}")
         
         # Update time queue
-        time_increment = D_t - self.T_max/self.T_total_rounds
+        per_round_time_budget = self.T_max / self.T_total_rounds
+        time_increment = D_t - per_round_time_budget
         prev_time_q = self.Q_time
         self.Q_time = max(0, self.Q_time + time_increment)
         
