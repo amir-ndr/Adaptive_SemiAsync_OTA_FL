@@ -8,6 +8,7 @@ from model import CNNMnist
 from dataloader import load_mnist, partition_mnist_noniid
 import matplotlib.pyplot as plt
 import logging
+import collections
 
 def evaluate_model(model, test_loader, device='cpu'):
     model.eval()
@@ -35,10 +36,9 @@ def main():
 
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 200
+    NUM_ROUNDS = 300
     BATCH_SIZE = 32
     LOCAL_EPOCHS = 1
-    LEARNING_RATE = 0.1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     print(f"Using device: {DEVICE}")
@@ -74,7 +74,7 @@ def main():
         print(f"Client {cid}: {len(client_data_map[cid])} samples | "
               f"Comp time: {client.dt_k:.4f}s")
     
-    E_max_dict = {cid: np.random.uniform(20, 30) for cid in range(NUM_CLIENTS)}
+    E_max_dict = {cid: np.random.uniform(25, 38) for cid in range(NUM_CLIENTS)}
     print("Client Energy Budgets:")
     for cid, budget in E_max_dict.items():
         print(f"  Client {cid}: {budget:.2f} J")
@@ -84,10 +84,10 @@ def main():
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=25.0,               # Lyapunov parameter
-        sigma_n=0.01,          # Noise std
+        V=14.0,               # Lyapunov parameter
+        sigma_n=0.04,          # Noise std
         tau_cm=0.01,           # Comm latency
-        T_max=300,             # Time budget (s)
+        T_max=500,             # Time budget (s)
         E_max=E_max_dict,      # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
@@ -99,6 +99,7 @@ def main():
     energy_queues = []
     avg_staleness_per_round = []
     selected_counts = []  # Track number of selected clients per round
+    client_selection_counts = {cid: 0 for cid in range(NUM_CLIENTS)}  # Track per-client selection count
 
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
@@ -108,7 +109,13 @@ def main():
         selected, power_alloc = server.select_clients()
         selected_ids = [c.client_id for c in selected]
         selected_counts.append(len(selected))
+        
+        # Update selection counts
+        for cid in selected_ids:
+            client_selection_counts[cid] += 1
+            
         print(f"Selected {len(selected)} clients: {selected_ids}")
+        print(f"Selection counts: {client_selection_counts}")
         
         # Broadcast model to selected clients
         server.broadcast_model(selected)
@@ -134,7 +141,7 @@ def main():
         
         if selected:
             aggregated = server.aggregate(selected, power_alloc)
-            server.update_model(aggregated, round_idx, LEARNING_RATE)  # Pass round index for LR decay
+            server.update_model(aggregated, round_idx)  # Pass round index for LR decay
         else:
             print("No clients selected - communication only round")
         
@@ -180,6 +187,12 @@ def main():
     print(f"Final accuracy: {final_acc:.2f}%")
     print(f"Average round duration: {np.mean(round_durations):.2f}s")
     print(f"Max energy queue: {max(energy_queues):.2f}")
+    
+    # Print client selection statistics
+    print("\nClient Selection Statistics:")
+    sorted_counts = sorted(client_selection_counts.items(), key=lambda x: x[1], reverse=True)
+    for cid, count in sorted_counts:
+        print(f"Client {cid}: Selected {count} times ({count/NUM_ROUNDS:.1%} of rounds)")
 
     # Plot results
     plt.figure(figsize=(15, 12))
@@ -225,12 +238,13 @@ def main():
     plt.ylabel("Staleness (rounds)")
     plt.grid(True)
     
-    # Energy consumption
+    # Client selection distribution
     plt.subplot(326)
-    plt.hist([server.Q_e[cid] for cid in range(NUM_CLIENTS)], bins=20)
-    plt.title("Final Energy Queue Distribution")
-    plt.xlabel("Energy Queue Value")
-    plt.ylabel("Number of Clients")
+    plt.bar(range(NUM_CLIENTS), [client_selection_counts[cid] for cid in range(NUM_CLIENTS)])
+    plt.title("Client Selection Distribution")
+    plt.xlabel("Client ID")
+    plt.ylabel("Times Selected")
+    plt.xticks(range(NUM_CLIENTS))
     plt.grid(True)
 
     plt.tight_layout(pad=3.0)
