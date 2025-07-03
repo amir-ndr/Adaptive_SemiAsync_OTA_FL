@@ -21,6 +21,12 @@ class Server:
         self.T_max = T_max
         self.T_total_rounds = T_total_rounds
         self.d = self._get_model_dimension()
+
+        self.total_energy_per_round = []  # Total energy per round
+        self.cumulative_energy_per_client = {  # Cumulative energy per client
+            client.client_id: 0.0 for client in clients
+        }
+        self.per_round_energy = []
         
         # Virtual queues
         self.Q_e = {client.client_id: 0.0 for client in clients}
@@ -248,6 +254,9 @@ class Server:
         logger.info(f"Updating queues | "
                     f"Round duration: {D_t:.4f}s | "
                     f"Time Q before: {self.Q_time:.2f}")
+
+        round_energy = 0
+        round_client_energy = {}
         
         # Update energy queues
         for client in selected:
@@ -256,10 +265,15 @@ class Server:
             E_comm = (power_alloc[cid])**2 * client.gradient_norm**2 / (abs(client.h_t_k)**2 + 1e-8)
             # Use actual computation time
             E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * (client.actual_comp_time * client.fk / (client.C * client.Ak))
-            
+
+            client_energy = E_comp + E_comm
+            round_energy += client_energy
+            self.cumulative_energy_per_client[cid] += client_energy
+            round_client_energy[cid] = client_energy
+
             # Per-round energy budget
             per_round_budget = self.E_max[cid] / self.T_total_rounds
-            energy_increment = E_comp + E_comm - per_round_budget
+            energy_increment = client_energy - per_round_budget
             
             prev_q = self.Q_e[cid]
             self.Q_e[cid] = max(0, self.Q_e[cid] + energy_increment)
@@ -269,6 +283,9 @@ class Server:
                          f"Comm: {E_comm:.4e} J | "
                          f"ΔQ: {energy_increment:.4e} | "
                          f"Q_e: {prev_q:.2f} → {self.Q_e[cid]:.2f}")
+
+        self.total_energy_per_round.append(round_energy)
+        self.per_round_energy.append(round_client_energy)
         
         # Update time queue
         per_round_time_budget = self.T_max / self.T_total_rounds

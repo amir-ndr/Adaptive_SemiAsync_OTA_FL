@@ -150,7 +150,10 @@ def run_experiment(selection_method, clients, E_max_dict, NUM_ROUNDS, BATCH_SIZE
         'avg_staleness': avg_staleness_per_round,
         'selected_counts': selected_counts,
         'selection_counts': client_selection_counts,
-        'model': server.global_model
+        'model': server.global_model,
+        'total_energy_per_round': server.total_energy_per_round,
+        'cumulative_energy_per_client': server.cumulative_energy_per_client,
+        'per_round_energy': server.per_round_energy
     }
 
 def main():
@@ -167,7 +170,7 @@ def main():
 
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 300
+    NUM_ROUNDS = 3
     BATCH_SIZE = 32
     LOCAL_EPOCHS = 1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -249,11 +252,35 @@ def main():
         for cid, count in sorted_counts:
             print(f"    Client {cid}: {count} times ({count/NUM_ROUNDS:.1%})")
 
+    print("\n=== Energy Consumption Analysis ===")
+    for method, res in results.items():
+        total_energy = sum(res['cumulative_energy_per_client'].values())
+        avg_per_round = np.mean(res['total_energy_per_round'])
+        
+        print(f"\n{method.capitalize()} selection:")
+        print(f"  Total system energy: {total_energy:.2f} J")
+        print(f"  Average energy per round: {avg_per_round:.2f} J")
+        print(f"  Energy per client:")
+        
+        # Print client energy distribution
+        sorted_energy = sorted(res['cumulative_energy_per_client'].items(), key=lambda x: x[1], reverse=True)
+        for cid, energy in sorted_energy:
+            budget_utilization = energy / E_max_dict[cid]
+            print(f"    Client {cid}: {energy:.2f} J ({budget_utilization:.1%} of budget)")
+    
+    # Calculate and print energy savings
+    algo_total = sum(results['algorithm']['cumulative_energy_per_client'].values())
+    random_total = sum(results['random']['cumulative_energy_per_client'].values())
+    savings = (random_total - algo_total) / random_total * 100
+    
+    print(f"\nEnergy Savings: Algorithm uses {savings:.1f}% less energy than Random selection")
+
+
     # Plot comparison
-    plt.figure(figsize=(15, 10))
+    plt.figure(figsize=(30, 25))
     
     # Accuracy comparison
-    plt.subplot(231)
+    plt.subplot(331)
     eval_rounds_algo = [5*i for i in range(len(results['algorithm']['accuracies']))]
     eval_rounds_random = [5*i for i in range(len(results['random']['accuracies']))]
     plt.plot(eval_rounds_algo, results['algorithm']['accuracies'], 'o-', label='Algorithm Selection')
@@ -265,7 +292,7 @@ def main():
     plt.grid(True)
     
     # Selection count comparison
-    plt.subplot(232)
+    plt.subplot(332)
     plt.plot(results['algorithm']['selected_counts'], label='Algorithm')
     plt.plot(results['random']['selected_counts'], label='Random')
     plt.title("Selected Clients per Round")
@@ -275,7 +302,7 @@ def main():
     plt.grid(True)
     
     # Energy queue comparison
-    plt.subplot(233)
+    plt.subplot(333)
     plt.plot(results['algorithm']['energy_queues'], label='Algorithm')
     plt.plot(results['random']['energy_queues'], label='Random')
     plt.title("Max Energy Queue Value")
@@ -285,7 +312,7 @@ def main():
     plt.grid(True)
     
     # Staleness comparison
-    plt.subplot(234)
+    plt.subplot(334)
     plt.plot(results['algorithm']['avg_staleness'], label='Algorithm')
     plt.plot(results['random']['avg_staleness'], label='Random')
     plt.title("Average Client Staleness")
@@ -295,7 +322,7 @@ def main():
     plt.grid(True)
     
     # Selection distribution comparison
-    plt.subplot(235)
+    plt.subplot(335)
     algo_counts = [results['algorithm']['selection_counts'][cid] for cid in range(NUM_CLIENTS)]
     random_counts = [results['random']['selection_counts'][cid] for cid in range(NUM_CLIENTS)]
     x = np.arange(NUM_CLIENTS)
@@ -310,18 +337,60 @@ def main():
     plt.grid(True)
     
     # Energy distribution comparison
-    plt.subplot(236)
-    algo_energy = [results['algorithm']['energy_queues'][-1]] * NUM_CLIENTS  # Final energy queue
-    random_energy = [results['random']['energy_queues'][-1]] * NUM_CLIENTS
+    # plt.subplot(336)
+    # algo_energy = [results['algorithm']['energy_queues'][-1]] * NUM_CLIENTS  # Final energy queue
+    # random_energy = [results['random']['energy_queues'][-1]] * NUM_CLIENTS
+    # plt.bar(x - width/2, algo_energy, width, label='Algorithm')
+    # plt.bar(x + width/2, random_energy, width, label='Random')
+    # plt.title("Final Energy Queue Distribution")
+    # plt.xlabel("Client ID")
+    # plt.ylabel("Energy Queue Value")
+    # plt.xticks(x)
+    # plt.legend()
+    # plt.grid(True)
+
+    plt.subplot(336)  # 3x3 grid, position 7
+    algo_energy = [results['algorithm']['cumulative_energy_per_client'][cid] for cid in range(NUM_CLIENTS)]
+    random_energy = [results['random']['cumulative_energy_per_client'][cid] for cid in range(NUM_CLIENTS)]
+    x = np.arange(NUM_CLIENTS)
+    width = 0.35
     plt.bar(x - width/2, algo_energy, width, label='Algorithm')
     plt.bar(x + width/2, random_energy, width, label='Random')
-    plt.title("Final Energy Queue Distribution")
+    plt.title("Cumulative Energy per Client")
     plt.xlabel("Client ID")
-    plt.ylabel("Energy Queue Value")
+    plt.ylabel("Total Energy (J)")
     plt.xticks(x)
     plt.legend()
     plt.grid(True)
-
+    
+    # 8. Energy proportion comparison
+    # plt.subplot(338)
+    # algo_proportions = [e/sum(algo_energy) for e in algo_energy]
+    # random_proportions = [e/sum(random_energy) for e in random_energy]
+    # plt.bar(x - width/2, algo_proportions, width, label='Algorithm')
+    # plt.bar(x + width/2, random_proportions, width, label='Random')
+    # plt.title("Energy Distribution Proportion")
+    # plt.xlabel("Client ID")
+    # plt.ylabel("Proportion of Total Energy")
+    # plt.xticks(x)
+    # plt.legend()
+    # plt.grid(True)
+    
+    # 9. Energy fairness comparison
+    plt.subplot(337)
+    # Calculate Jain's fairness index
+    def jains_fairness(values):
+        return sum(values)**2 / (len(values) * sum(v**2 for v in values))
+    
+    fairness_algo = jains_fairness(algo_energy)
+    fairness_random = jains_fairness(random_energy)
+    
+    plt.bar(['Algorithm', 'Random'], [fairness_algo, fairness_random], color=['blue', 'orange'])
+    plt.ylim(0, 1.1)
+    plt.title("Energy Fairness Comparison")
+    plt.ylabel("Jain's Fairness Index")
+    plt.grid(True)
+    
     plt.tight_layout(pad=3.0)
     plt.savefig("fl_comparison_results.png", dpi=300)
     plt.show()
