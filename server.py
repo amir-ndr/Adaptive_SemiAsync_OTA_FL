@@ -106,6 +106,37 @@ class Server:
         
         return selected, power_alloc
 
+    def random_selection(self):
+        """Select random clients with proper attribute initialization"""
+        # Ensure all clients have required attributes set
+        for client in self.clients:
+            client.set_channel_gain()
+            # Use last gradient norm or default to 1.0 if never computed
+            if not hasattr(client, 'gradient_norm') or client.gradient_norm == 0:
+                client.gradient_norm = 1.0
+        
+        # Determine random number of clients to select (between 2 and 8)
+        n_selected = np.random.randint(2, 9)
+        
+        # Randomly select clients
+        selected = np.random.choice(
+            self.clients, 
+            size=min(n_selected, len(self.clients)),
+            replace=False
+        ).tolist()
+        
+        # Compute power allocation
+        power_alloc = self._compute_power(selected)
+        
+        logger.info(f"Randomly selected {len(selected)} clients: {[c.client_id for c in selected]}")
+        for client in selected:
+            logger.info(f"  Client {client.client_id} | "
+                        f"Power: {power_alloc.get(client.client_id, 0):.4f} | "
+                        f"Channel: {abs(client.h_t_k):.4f} | "
+                        f"Grad Norm: {client.gradient_norm:.4f}")
+        
+        return selected, power_alloc
+
     def _exact_cost(self, candidate_set):
         """Calculate exact drift-plus-penalty cost for candidate set"""
         if not candidate_set:
