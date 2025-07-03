@@ -77,7 +77,7 @@ class Client:
         
         # Backward pass with gradient clipping
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.local_model.parameters(), max_norm=5.0)
+        # torch.nn.utils.clip_grad_norm_(self.local_model.parameters(), max_norm=5.0)
         
         # Extract and flatten gradients
         gradients = []

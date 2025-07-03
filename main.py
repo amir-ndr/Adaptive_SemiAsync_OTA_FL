@@ -35,9 +35,10 @@ def main():
 
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 100
+    NUM_ROUNDS = 200
     BATCH_SIZE = 32
     LOCAL_EPOCHS = 1
+    LEARNING_RATE = 0.1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     print(f"Using device: {DEVICE}")
@@ -73,7 +74,7 @@ def main():
         print(f"Client {cid}: {len(client_data_map[cid])} samples | "
               f"Comp time: {client.dt_k:.4f}s")
     
-    E_max_dict = {cid: np.random.uniform(30, 70) for cid in range(NUM_CLIENTS)}
+    E_max_dict = {cid: np.random.uniform(20, 30) for cid in range(NUM_CLIENTS)}
     print("Client Energy Budgets:")
     for cid, budget in E_max_dict.items():
         print(f"  Client {cid}: {budget:.2f} J")
@@ -86,7 +87,7 @@ def main():
         V=25.0,               # Lyapunov parameter
         sigma_n=0.01,          # Noise std
         tau_cm=0.01,           # Comm latency
-        T_max=200,             # Time budget (s)
+        T_max=300,             # Time budget (s)
         E_max=E_max_dict,      # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
@@ -133,7 +134,7 @@ def main():
         
         if selected:
             aggregated = server.aggregate(selected, power_alloc)
-            server.update_model(aggregated, round_idx)  # Pass round index for LR decay
+            server.update_model(aggregated, round_idx, LEARNING_RATE)  # Pass round index for LR decay
         else:
             print("No clients selected - communication only round")
         

@@ -196,10 +196,10 @@ class Server:
                     f"Update norm: {torch.norm(result).item():.4f}")
         return result
 
-    def update_model(self, update, round_idx):
+    def update_model(self, update, round_idx, lr):
         """Update global model with decaying learning rate"""
         # Decaying learning rate
-        lr = 0.1 * (0.95 ** (round_idx // 10))
+        # lr = 0.12 #* (0.95 ** (round_idx // 10))
         
         with torch.no_grad():
             params = torch.nn.utils.parameters_to_vector(self.global_model.parameters())
