@@ -29,6 +29,9 @@ def run_experiment(selection_method, clients, E_max_dict, NUM_ROUNDS, BATCH_SIZE
     global_model = CNNMnist().to(DEVICE)
     train_dataset, test_dataset = load_mnist()
     test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
+    cumulative_time = 0
+    time_points = []
+    time_based_accuracies = []
     
     # Initialize server
     server = Server(
@@ -122,8 +125,16 @@ def run_experiment(selection_method, clients, E_max_dict, NUM_ROUNDS, BATCH_SIZE
         round_durations.append(D_t)
         
         # Evaluate every 5 rounds
-        if (round_idx + 1) % 5 == 0 or round_idx == 0:
+        # if (round_idx + 1) % 5 == 0 or round_idx == 0:
+        #     acc = evaluate_model(server.global_model, test_loader, DEVICE)
+        #     accuracies.append(acc)
+        #     print(f"Global model accuracy: {acc:.2f}%")
+
+        cumulative_time += D_t  # Add round duration to total
+        if (round_idx + 1) % 5 == 0:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
+            time_points.append(cumulative_time)
+            time_based_accuracies.append(acc)
             accuracies.append(acc)
             print(f"Global model accuracy: {acc:.2f}%")
         
@@ -153,7 +164,9 @@ def run_experiment(selection_method, clients, E_max_dict, NUM_ROUNDS, BATCH_SIZE
         'model': server.global_model,
         'total_energy_per_round': server.total_energy_per_round,
         'cumulative_energy_per_client': server.cumulative_energy_per_client,
-        'per_round_energy': server.per_round_energy
+        'per_round_energy': server.per_round_energy,
+        'time_points': time_points,
+        'time_based_accuracies': time_based_accuracies
     }
 
 def main():
@@ -170,7 +183,7 @@ def main():
 
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 995
+    NUM_ROUNDS = 10
     BATCH_SIZE = 16
     LOCAL_EPOCHS = 1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -390,6 +403,19 @@ def main():
     plt.title("Energy Fairness Comparison")
     plt.ylabel("Jain's Fairness Index")
     plt.grid(True)
+
+    plt.subplot(338)
+    plt.plot(results['algorithm']['time_points'], 
+            results['algorithm']['time_based_accuracies'], 
+            'o-', label='Proposed Algorithm')
+    plt.plot(results['random']['time_points'], 
+            results['random']['time_based_accuracies'], 
+            's--', label='Random Selection')
+    plt.title("Accuracy vs. Wall-clock Time")
+    plt.xlabel("Time Elapsed (seconds)")
+    plt.ylabel("Test Accuracy (%)")
+    plt.grid(True)
+    plt.legend()
     
     plt.tight_layout(pad=3.0)
     plt.savefig("fl_comparison_results.png", dpi=300)
