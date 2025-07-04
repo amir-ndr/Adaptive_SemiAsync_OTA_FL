@@ -34,10 +34,10 @@ def run_experiment(selection_method, clients, E_max_dict, NUM_ROUNDS, BATCH_SIZE
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=14.0,               # Lyapunov parameter
-        sigma_n=0.04,          # Noise std
+        V=18.12,               # Lyapunov parameter
+        sigma_n=0.09,          # Noise std
         tau_cm=0.01,           # Comm latency
-        T_max=500,             # Time budget (s)
+        T_max=1041,             # Time budget (s)
         E_max=E_max_dict,      # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
@@ -170,8 +170,8 @@ def main():
 
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 3
-    BATCH_SIZE = 32
+    NUM_ROUNDS = 995
+    BATCH_SIZE = 16
     LOCAL_EPOCHS = 1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
@@ -197,7 +197,7 @@ def main():
             model=CNNMnist(),
             fk=np.random.uniform(1e9, 2e9),
             mu_k=1e-27,
-            P_max=2.0 + np.random.rand(),
+            P_max=1.0 + np.random.rand(),
             C=1e6,
             Ak=BATCH_SIZE,
             train_dataset=train_dataset,
@@ -208,7 +208,7 @@ def main():
         print(f"Client {cid}: {len(client_data_map[cid])} samples | "
               f"Comp time: {client.dt_k:.4f}s")
     
-    E_max_dict = {cid: np.random.uniform(25, 38) for cid in range(NUM_CLIENTS)}
+    E_max_dict = {cid: np.random.uniform(5.71, 15.7) for cid in range(NUM_CLIENTS)}
     print("Client Energy Budgets:")
     for cid, budget in E_max_dict.items():
         print(f"  Client {cid}: {budget:.2f} J")

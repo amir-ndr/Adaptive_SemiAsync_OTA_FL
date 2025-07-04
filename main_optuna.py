@@ -40,7 +40,7 @@ def objective(trial):
     sigma_n = trial.suggest_float("sigma_n", 0.001, 0.1, log=True)
     tau_cm = trial.suggest_float("tau_cm", 0.001, 0.05)
     T_max = trial.suggest_int("T_max", 100, 1500)
-    learning_rate = trial.suggest_float("learning_rate", 0.01, 0.12, log=True)
+    # learning_rate = trial.suggest_float("learning_rate", 0.01, 0.12, log=True)
     
     # Energy budget range
     E_min = trial.suggest_float("E_min", 5.0, 30.0)
@@ -56,7 +56,7 @@ def objective(trial):
         # Per-client heterogeneity
         client_fk = np.random.uniform(1e9, 2e9)
         client_mu_k = np.random.uniform(1e-28, 1e-26)
-        client_P_max = np.random.uniform(1.0, 4.0)
+        client_P_max = np.random.uniform(1.0, 2.0)
         
         client = Client(
             client_id=cid,
@@ -119,7 +119,7 @@ def objective(trial):
         
         if selected:
             aggregated = server.aggregate(selected, power_alloc)
-            server.update_model(aggregated, round_idx, learning_rate)  # Pass round index for LR decay
+            server.update_model(aggregated, round_idx)  # Pass round index for LR decay
         
         # 5. Update queues
         server.update_queues(selected, power_alloc, D_t)
@@ -155,7 +155,7 @@ if __name__ == "__main__":
     )
     
     # Run optimization
-    study.optimize(objective, n_trials=100, timeout=3600)
+    study.optimize(objective, n_trials=300, timeout=3600)
     
     # Print best results
     print("\nBest trial:")
