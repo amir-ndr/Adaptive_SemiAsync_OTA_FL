@@ -3,18 +3,42 @@ import numpy as np
 import time
 import copy
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from model import CNNMnist
 from server_cotaf import COTAFServer
 from client_cotaf import COTAFClient
 from dataloader import load_mnist, partition_mnist_noniid
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def calculate_cnnmnist_flops():
+    """Calculate FLOPs for one forward+backward pass of CNNMnist"""
+    # Conv1: 1x32x5x5 kernel, input (1,28,28), output (32,28,28)
+    conv1_flops = 28 * 28 * 32 * (5 * 5 * 1)  # 28*28*32*25
+    
+    # Conv2: 32x64x5x5 kernel, input (32,14,14), output (64,14,14)
+    conv2_flops = 14 * 14 * 64 * (5 * 5 * 32)  # 14*14*64*800
+    
+    # FC1: 7*7*64 = 3136 → 512
+    fc1_flops = 3136 * 512 * 2  # Multiply-add operations
+    
+    # FC2: 512 → 10
+    fc2_flops = 512 * 10 * 2
+    
+    # ReLU layers (approximately 1 FLOP per element)
+    relu1_flops = 28 * 28 * 32
+    relu2_flops = 14 * 14 * 64
+    relu3_flops = 512
+    
+    total_flops = (conv1_flops + conv2_flops + fc1_flops + fc2_flops +
+                   relu1_flops + relu2_flops + relu3_flops)
+    
+    # Backward pass requires ~2x forward FLOPs
+    return total_flops * 3  # Approximate total FLOPs per sample
 
 def evaluate_model(model, test_loader, device='cpu'):
-    # Create new loader with proper device settings
-    test_loader = DataLoader(test_loader.dataset, 
-                            batch_size=test_loader.batch_size,
-                            shuffle=False,
-                            pin_memory=(device=='cuda'))
     model.eval()
     correct, total = 0, 0
     with torch.no_grad():
@@ -28,198 +52,192 @@ def evaluate_model(model, test_loader, device='cpu'):
 
 def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
     # Initialize global model
-    train_data, test_data = load_mnist()
+    train_dataset, test_data = load_mnist()
     global_model = CNNMnist().to(DEVICE)
-    test_loader = DataLoader(test_data, batch_size=256, shuffle=False, pin_memory=(DEVICE=='cuda'))
+    test_loader = DataLoader(test_data, batch_size=256, shuffle=False)
     
     # Initialize COTAF server
     server = COTAFServer(
         global_model=global_model,
         clients=clients,
-        P_max=0.5,          # Reduced from 1.0 for better stability
-        noise_var=0.001,
-        H_local=1,
+        P_max=0.5,          # Transmission power constraint
+        noise_var=0.001,    # Channel noise variance
+        H_local=1,          # Local steps per round
         device=DEVICE
     )
 
     # Initialize metrics
-    energy_metrics = {
-        'per_round_total': [],
-        'cumulative_per_client': {c.client_id: 0.0 for c in clients},
-        'per_round_per_client': []
+    metrics = {
+        'accuracies': [],
+        'evaluation_rounds': [],
+        'losses': [],
+        'round_times': [],
+        'total_energy': [],
+        'alpha_values': [],
+        'divergence': []
     }
-    accuracies = []
-    losses = []
-    evaluation_rounds = []
-    round_durations = []
-    time_points = []
-    cumulative_time = 0
-    learning_rate = 0.05  # Reduced initial learning rate
     
     # Initial evaluation
     initial_acc = evaluate_model(global_model, test_loader, DEVICE)
-    accuracies.append(initial_acc)
-    evaluation_rounds.append(0)
-    time_points.append(0.0)
-    print(f"Initial model accuracy: {initial_acc:.2f}%")
+    metrics['accuracies'].append(initial_acc)
+    metrics['evaluation_rounds'].append(0)
+    logging.info(f"Initial model accuracy: {initial_acc:.2f}%")
     
-    print("\n=== Starting COTAF Experiment ===")
+    logging.info("\n=== Starting COTAF Experiment ===")
+    cumulative_time = 0
+    learning_rate = 0.05
     
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
-        print(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
+        logging.info(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
-        # Learning rate decay (more frequent)
-        if round_idx > 0 and round_idx % 15 == 0:  # Changed from 20 to 15
+        # Learning rate decay
+        if round_idx > 0 and round_idx % 15 == 0:
             learning_rate *= 0.5
             for client in clients:
                 for param_group in client.optimizer.param_groups:
                     param_group['lr'] = learning_rate
-            print(f"Learning rate decayed to: {learning_rate}")
+            logging.info(f"Learning rate decayed to: {learning_rate}")
         
-        # 1. Broadcast global model to ALL clients
+        # 1. Broadcast global model
         server.broadcast_model()
         
-        # 2. Local training (H steps)
-        comp_times = []
+        # 2. Simulate fading channel (optional)
+        if True:  # Set to False to disable fading
+            fading_coeffs = [complex(np.random.randn(), np.random.randn()) 
+                            for _ in range(len(clients))]
+            server.apply_fading(fading_coeffs)
+        
+        # 3. Local training
         client_losses = []
         for client in clients:
-            client_start = time.time()
-            loss = client.local_train()  # Returns average loss
+            loss = client.local_train()
             client_losses.append(loss)
-            comp_times.append(time.time() - client_start)
         
         avg_loss = np.mean(client_losses)
-        losses.append(avg_loss)
-        print(f"Average client loss: {avg_loss:.4f}")
+        metrics['losses'].append(avg_loss)
+        logging.info(f"Average client loss: {avg_loss:.4f}")
         
-        # 3. COTAF aggregation
+        # 4. COTAF aggregation
         new_state = server.aggregate()
         server.update_model(new_state)
         
-        # 4. Record metrics
-        round_time = max(comp_times)  # Synchronous = slowest client
+        # 5. Record metrics
+        round_time = time.time() - round_start
         cumulative_time += round_time
-        round_durations.append(round_time)
-
-        # Energy tracking
-        if server.energy_tracker['per_round_total']:
-            current_round_energy = server.energy_tracker['per_round_total'][-1]
-            energy_metrics['per_round_total'].append(current_round_energy)
-            
-            current_client_energy = server.energy_tracker['per_client_per_round'][-1]
-            energy_metrics['per_round_per_client'].append(current_client_energy)
-            
-            for cid, energy in current_client_energy.items():
-                energy_metrics['cumulative_per_client'][cid] += energy
+        metrics['round_times'].append(round_time)
+        
+        # Track alpha value
+        try:
+            # Get updates for alpha calculation (without tx_duration)
+            updates = [client.get_update(0.1) for client in clients]
+            alpha_t = server.compute_alpha_t(updates)
+            metrics['alpha_values'].append(alpha_t)
+        except Exception as e:
+            logging.error(f"Error computing alpha_t: {str(e)}")
+            metrics['alpha_values'].append(0.1)
+        
+        # Track divergence if available
+        if 'divergence_history' in server.energy_tracker and server.energy_tracker['divergence_history']:
+            metrics['divergence'].append(server.energy_tracker['divergence_history'][-1])
+        
+        # Track total energy
+        if 'per_round_total' in server.energy_tracker and server.energy_tracker['per_round_total']:
+            metrics['total_energy'].append(sum(server.energy_tracker['per_round_total']))
+        else:
+            metrics['total_energy'].append(0)
         
         # Evaluate every 5 rounds
-        evaluate_this_round = (round_idx + 1) % 5 == 0
-        if evaluate_this_round:
+        if (round_idx + 1) % 5 == 0 or round_idx == NUM_ROUNDS - 1:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
-            accuracies.append(acc)
-            evaluation_rounds.append(round_idx+1)
-            time_points.append(cumulative_time)
-            print(f"Global model accuracy: {acc:.2f}%")
+            metrics['accuracies'].append(acc)
+            metrics['evaluation_rounds'].append(round_idx+1)
+            logging.info(f"Global model accuracy: {acc:.2f}%")
         
-        print(f"Round duration: {round_time:.4f}s | "
-              f"Cumulative time: {cumulative_time:.2f}s")
+        logging.info(f"Round duration: {round_time:.4f}s | Cumulative time: {cumulative_time:.2f}s")
     
-    # Final evaluation (always evaluate last round)
-    final_acc = evaluate_model(server.global_model, test_loader, DEVICE)
-    accuracies.append(final_acc)
-    evaluation_rounds.append(NUM_ROUNDS)
-    time_points.append(cumulative_time)
-    
-    # Add diagnostic print for alpha_t
-    print(f"Final α_t: {server.compute_alpha_t([c.get_update() for c in clients]):.6f}")
-    
-    return {
-        'accuracies': accuracies,
-        'evaluation_rounds': evaluation_rounds,
-        'final_acc': final_acc,
-        'losses': losses,
-        'round_durations': round_durations,
-        'time_points': time_points,
-        'total_time': cumulative_time,
-        'energy_metrics': energy_metrics,
-        'total_energy': sum(energy_metrics['per_round_total'])
-    }
+    # Final metrics
+    metrics['final_acc'] = metrics['accuracies'][-1]
+    metrics['total_time'] = cumulative_time
+    metrics['energy_metrics'] = server.energy_tracker
+    return metrics
 
 def plot_cotaf_results(results):
-    """Plot COTAF experiment results"""
     plt.figure(figsize=(15, 10))
     
-    # Accuracy vs Rounds
+    # Accuracy plot
     plt.subplot(2, 2, 1)
     plt.plot(results['evaluation_rounds'], results['accuracies'], 'o-')
-    plt.title("COTAF: Accuracy vs Communication Rounds")
+    plt.title("Model Accuracy")
     plt.xlabel("Communication Rounds")
     plt.ylabel("Accuracy (%)")
     plt.grid(True)
     
-    # Accuracy vs Time
+    # Loss plot
     plt.subplot(2, 2, 2)
-    plt.plot(results['time_points'], results['accuracies'], 's-')
-    plt.title("COTAF: Accuracy vs Wall-clock Time")
-    plt.xlabel("Time Elapsed (seconds)")
-    plt.ylabel("Accuracy (%)")
+    plt.plot(results['losses'])
+    plt.title("Training Loss")
+    plt.xlabel("Communication Rounds")
+    plt.ylabel("Average Client Loss")
     plt.grid(True)
     
-    # Round Duration
-    plt.subplot(2, 2, 3)
-    plt.plot(results['round_durations'], 'o-', markersize=3)
-    plt.title("Round Duration Over Time")
-    plt.xlabel("Round Index")
-    plt.ylabel("Duration (seconds)")
-    plt.grid(True)
+    # Energy consumption
+    if results['total_energy']:
+        plt.subplot(2, 2, 3)
+        plt.plot(results['total_energy'])
+        plt.title("Cumulative Energy Consumption")
+        plt.xlabel("Communication Rounds")
+        plt.ylabel("Total Energy (J)")
+        plt.grid(True)
     
-    # Cumulative Time
-    plt.subplot(2, 2, 4)
-    plt.plot(np.cumsum(results['round_durations']), 's-', markersize=3)
-    plt.title("Cumulative Training Time")
-    plt.xlabel("Round Index")
-    plt.ylabel("Total Time (seconds)")
-    plt.grid(True)
+    # Alpha values
+    if results['alpha_values']:
+        plt.subplot(2, 2, 4)
+        plt.plot(results['alpha_values'])
+        plt.title("Precoding Factor (αₜ)")
+        plt.xlabel("Communication Rounds")
+        plt.ylabel("αₜ Value")
+        plt.yscale('log')
+        plt.grid(True)
     
     plt.tight_layout()
-    plt.savefig("cotaf_results.png", dpi=150)
+    plt.savefig('cotaf_results.png')
     plt.show()
 
 def plot_energy_results(results):
-    """Plot energy consumption results for COTAF"""
+    if 'energy_metrics' not in results or not results['energy_metrics']:
+        logging.warning("No energy metrics available for plotting")
+        return
+        
     energy = results['energy_metrics']
+    plt.figure(figsize=(12, 5))
     
-    plt.figure(figsize=(15, 5))
+    # Per-round energy
+    plt.subplot(1, 2, 1)
+    if 'per_round_total' in energy:
+        plt.plot(energy['per_round_total'])
+        plt.title("Per-Round Energy Consumption")
+        plt.xlabel("Round Index")
+        plt.ylabel("Energy (J)")
+        plt.grid(True)
+    else:
+        plt.text(0.5, 0.5, "No per-round energy data", ha='center')
     
-    # Total energy per round
-    plt.subplot(1, 3, 1)
-    plt.plot(energy['per_round_total'], 'o-')
-    plt.title("Total System Energy per Round")
-    plt.xlabel("Round Index")
-    plt.ylabel("Energy (Joules)")
-    plt.grid(True)
-    
-    # Cumulative energy
-    plt.subplot(1, 3, 2)
-    plt.plot(np.cumsum(energy['per_round_total']), 's-')
-    plt.title("Cumulative System Energy")
-    plt.xlabel("Round Index")
-    plt.ylabel("Total Energy (Joules)")
-    plt.grid(True)
-    
-    # Per-client energy distribution
-    plt.subplot(1, 3, 3)
-    client_ids = list(energy['cumulative_per_client'].keys())
-    cumulative_energy = [energy['cumulative_per_client'][cid] for cid in client_ids]
-    plt.bar(client_ids, cumulative_energy)
-    plt.title("Cumulative Energy per Client")
-    plt.xlabel("Client ID")
-    plt.ylabel("Total Energy (Joules)")
-    plt.grid(True)
+    # Cumulative per-client energy
+    plt.subplot(1, 2, 2)
+    if 'cumulative_per_client' in energy:
+        client_ids = list(energy['cumulative_per_client'].keys())
+        cumulative_energy = [energy['cumulative_per_client'][cid] for cid in client_ids]
+        plt.bar(client_ids, cumulative_energy)
+        plt.title("Cumulative Energy per Client")
+        plt.xlabel("Client ID")
+        plt.ylabel("Total Energy (J)")
+        plt.grid(True)
+    else:
+        plt.text(0.5, 0.5, "No per-client energy data", ha='center')
     
     plt.tight_layout()
-    plt.savefig("cotaf_energy_results.png", dpi=150)
+    plt.savefig('energy_results.png')
     plt.show()
 
 if __name__ == "__main__":
@@ -229,22 +247,32 @@ if __name__ == "__main__":
     BATCH_SIZE = 32
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    print(f"Using device: {DEVICE}")
+    logging.info(f"Using device: {DEVICE}")
     
     # Load and partition data
     train_dataset, test_data = load_mnist()
-    client_data_map = partition_mnist_noniid(train_dataset, NUM_CLIENTS)
     
-    # Create clients
+    # Precompute FLOPs for CNNMnist model
+    C = calculate_cnnmnist_flops()
+    logging.info(f"Precomputed FLOPs per sample: {C / 1e6:.2f}M")
+    
+    # Partition with 10 shards per client to use all data
+    client_data_map = partition_mnist_noniid(
+        train_dataset, 
+        num_clients=NUM_CLIENTS, 
+        shards_per_client=10  # Matches 100 total shards
+    )
+    
+    # Create clients with realistic parameters
     cotaf_clients = [
         COTAFClient(
             client_id=cid,
             data_indices=client_data_map[cid],
             model=CNNMnist(),
-            fk=np.random.uniform(1e9, 2e9),
-            mu_k=1e-27,
-            P_max=1.0 + np.random.rand(),
-            C=1e6,
+            fk=np.random.uniform(1e9, 3e9),  # CPU frequency: 1-3 GHz
+            mu_k=1e-27,       # Energy efficiency coefficient
+            P_max=0.5 + np.random.rand() * 0.5,  # Transmission power: 0.5-1.0 W
+            C=C,              # Precomputed FLOPs per sample
             Ak=BATCH_SIZE,
             train_dataset=train_dataset,
             device=DEVICE,
@@ -255,7 +283,12 @@ if __name__ == "__main__":
     
     # Initialize optimizers
     for client in cotaf_clients:
-        client.optimizer = torch.optim.SGD(client.local_model.parameters(), lr=0.01)
+        client.optimizer = torch.optim.SGD(
+            client.local_model.parameters(), 
+            lr=0.01,
+            momentum=0.9,
+            weight_decay=1e-4
+        )
     
     # Run COTAF experiment
     results = run_cotaf_experiment(
@@ -270,16 +303,20 @@ if __name__ == "__main__":
     plot_energy_results(results)
     
     # Print final results
-    print("\n=== COTAF Final Results ===")
-    print(f"Final accuracy: {results['final_acc']:.2f}%")
-    print(f"Total training time: {results['total_time']:.2f} seconds")
-    print(f"Average round duration: {np.mean(results['round_durations']):.4f} seconds")
-    print(f"Total rounds: {NUM_ROUNDS}")
+    logging.info("\n=== COTAF Final Results ===")
+    logging.info(f"Final accuracy: {results['final_acc']:.2f}%")
+    logging.info(f"Total training time: {results['total_time']:.2f} seconds")
+    logging.info(f"Average round duration: {np.mean(results['round_times']):.4f} seconds")
+    logging.info(f"Total rounds: {NUM_ROUNDS}")
 
-    print("\nEnergy Consumption Summary:")
-    print(f"Total system energy: {results['total_energy']:.2f} J")
-    print(f"Average per-round energy: {np.mean(results['energy_metrics']['per_round_total']):.2f} J")
-    
-    print("\nPer-client cumulative energy:")
-    for cid, energy in results['energy_metrics']['cumulative_per_client'].items():
-        print(f"Client {cid}: {energy:.2f} J")
+    if 'energy_metrics' in results:
+        logging.info("\nEnergy Consumption Summary:")
+        if 'per_round_total' in results['energy_metrics']:
+            total_energy = sum(results['energy_metrics']['per_round_total'])
+            logging.info(f"Total system energy: {total_energy:.2f} J")
+            logging.info(f"Average per-round energy: {np.mean(results['energy_metrics']['per_round_total']):.2f} J")
+        
+        if 'cumulative_per_client' in results['energy_metrics']:
+            logging.info("\nPer-client cumulative energy:")
+            for cid, energy in results['energy_metrics']['cumulative_per_client'].items():
+                logging.info(f"Client {cid}: {energy:.2f} J")
