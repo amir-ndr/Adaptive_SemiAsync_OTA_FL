@@ -16,7 +16,7 @@ class COTAFClient(Client):
         self.theta_prev = None
         self.theta_current = None
         self.train_loader = self._create_data_loader()
-        self.optimizer = torch.optim.SGD(self.local_model.parameters(), lr=0.01)
+        self.optimizer = torch.optim.SGD(self.local_model.parameters(), lr=0.1)
 
         
         # Energy tracking
@@ -40,19 +40,15 @@ class COTAFClient(Client):
     def local_train(self):
         """Perform local SGD training for H steps and track computation energy"""
         self.local_model.train()
+        total_loss = 0.0
+        num_batches = 0
         
-        # Reset energy counters
-        self.comp_energy = 0.0
-        
-        # Compute number of FLOPs
-        num_batches = len(self.train_loader)
-        total_samples = num_batches * self.Ak
-        total_flops = self.C * total_samples * self.local_epochs
-        
-        # Calculate computation energy
+        # Compute FLOPs and energy
+        total_samples = len(self.train_loader.dataset) * self.local_epochs
+        total_flops = self.C * total_samples
         self.comp_energy = self.mu_k * (self.fk ** 2) * total_flops
         
-        # Actual training
+        # Training loop
         for epoch in range(self.local_epochs):
             for data, labels in self.train_loader:
                 data, labels = data.to(self.device), labels.to(self.device)
@@ -60,32 +56,27 @@ class COTAFClient(Client):
                 outputs = self.local_model(data)
                 loss = torch.nn.functional.cross_entropy(outputs, labels)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.local_model.parameters(), 5.0)
                 self.optimizer.step()
-        
-        # Update current state after training
+                
+                total_loss += loss.item() * data.size(0)  # Weight by batch size
+                num_batches += data.size(0)
+
+        # Update model state
         self.theta_current = copy.deepcopy(self.local_model.state_dict())
+        return total_loss / num_batches  # Return average loss
     
     def get_update(self):
-        """Compute model update and its norm for communication energy"""
-
-        if self.theta_prev is None:  # First round case
-            # Return zero update with correct structure
-            update = {}
-            for key in self.theta_current:
-                update[key] = torch.zeros_like(self.theta_current[key])
-            return update
-
+        # Remove zero-update special case
         if self.theta_prev is None or self.theta_current is None:
-            return None
+            return None  # Shouldn't happen after initialization
             
         update = {}
         self.norm_squared = 0.0
-        
         for key in self.theta_current:
             delta = self.theta_current[key] - self.theta_prev[key]
             update[key] = delta
             self.norm_squared += torch.norm(delta).item() ** 2
-            
         return update
     
     def get_energy_consumption(self, alpha_t):

@@ -27,34 +27,41 @@ def evaluate_model(model, test_loader, device='cpu'):
     return 100 * correct / total
 
 def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
-    """Run COTAF experiment with identical setup"""
     # Initialize global model
     train_data, test_data = load_mnist()
     global_model = CNNMnist().to(DEVICE)
-    test_loader = DataLoader(test_data, batch_size=256, shuffle=False)
+    test_loader = DataLoader(test_data, batch_size=256, shuffle=False, pin_memory=(DEVICE=='cuda'))
     
     # Initialize COTAF server
     server = COTAFServer(
         global_model=global_model,
         clients=clients,
-        P_max=1.0,
-        noise_var=0.01,
+        P_max=0.5,          # Reduced from 1.0 for better stability
+        noise_var=0.001,
         H_local=1,
         device=DEVICE
     )
 
+    # Initialize metrics
     energy_metrics = {
         'per_round_total': [],
         'cumulative_per_client': {c.client_id: 0.0 for c in clients},
         'per_round_per_client': []
     }
-
-    # Training metrics
     accuracies = []
-    evaluation_rounds = []  # Track actual round numbers of evaluations
+    losses = []
+    evaluation_rounds = []
     round_durations = []
     time_points = []
     cumulative_time = 0
+    learning_rate = 0.05  # Reduced initial learning rate
+    
+    # Initial evaluation
+    initial_acc = evaluate_model(global_model, test_loader, DEVICE)
+    accuracies.append(initial_acc)
+    evaluation_rounds.append(0)
+    time_points.append(0.0)
+    print(f"Initial model accuracy: {initial_acc:.2f}%")
     
     print("\n=== Starting COTAF Experiment ===")
     
@@ -62,17 +69,31 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
         round_start = time.time()
         print(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
+        # Learning rate decay (more frequent)
+        if round_idx > 0 and round_idx % 15 == 0:  # Changed from 20 to 15
+            learning_rate *= 0.5
+            for client in clients:
+                for param_group in client.optimizer.param_groups:
+                    param_group['lr'] = learning_rate
+            print(f"Learning rate decayed to: {learning_rate}")
+        
         # 1. Broadcast global model to ALL clients
         server.broadcast_model()
         
         # 2. Local training (H steps)
         comp_times = []
+        client_losses = []
         for client in clients:
             client_start = time.time()
-            client.local_train()
+            loss = client.local_train()  # Returns average loss
+            client_losses.append(loss)
             comp_times.append(time.time() - client_start)
         
-        # 3. COTAF aggregation (all clients participate)
+        avg_loss = np.mean(client_losses)
+        losses.append(avg_loss)
+        print(f"Average client loss: {avg_loss:.4f}")
+        
+        # 3. COTAF aggregation
         new_state = server.aggregate()
         server.update_model(new_state)
         
@@ -82,18 +103,19 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
         round_durations.append(round_time)
 
         # Energy tracking
-        if server.energy_tracker['per_round_total']:  # Check if not empty
-            energy_metrics['per_round_total'].append(
-                server.energy_tracker['per_round_total'][-1]
-            )
-            energy_metrics['per_round_per_client'].append(
-                server.energy_tracker['per_client_per_round'][-1]
-            )
-            for cid, energy in server.energy_tracker['per_client_per_round'][-1].items():
+        if server.energy_tracker['per_round_total']:
+            current_round_energy = server.energy_tracker['per_round_total'][-1]
+            energy_metrics['per_round_total'].append(current_round_energy)
+            
+            current_client_energy = server.energy_tracker['per_client_per_round'][-1]
+            energy_metrics['per_round_per_client'].append(current_client_energy)
+            
+            for cid, energy in current_client_energy.items():
                 energy_metrics['cumulative_per_client'][cid] += energy
         
-        # 5. Evaluate periodically
-        if (round_idx + 1) % 5 == 0 or round_idx == 0:
+        # Evaluate every 5 rounds
+        evaluate_this_round = (round_idx + 1) % 5 == 0
+        if evaluate_this_round:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
             accuracies.append(acc)
             evaluation_rounds.append(round_idx+1)
@@ -103,19 +125,20 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
         print(f"Round duration: {round_time:.4f}s | "
               f"Cumulative time: {cumulative_time:.2f}s")
     
-    # Final evaluation (if not already done)
-    if NUM_ROUNDS % 5 != 0:
-        final_acc = evaluate_model(server.global_model, test_loader, DEVICE)
-        accuracies.append(final_acc)
-        evaluation_rounds.append(NUM_ROUNDS)
-        time_points.append(cumulative_time)
-    else:
-        final_acc = accuracies[-1]
+    # Final evaluation (always evaluate last round)
+    final_acc = evaluate_model(server.global_model, test_loader, DEVICE)
+    accuracies.append(final_acc)
+    evaluation_rounds.append(NUM_ROUNDS)
+    time_points.append(cumulative_time)
+    
+    # Add diagnostic print for alpha_t
+    print(f"Final α_t: {server.compute_alpha_t([c.get_update() for c in clients]):.6f}")
     
     return {
         'accuracies': accuracies,
         'evaluation_rounds': evaluation_rounds,
         'final_acc': final_acc,
+        'losses': losses,
         'round_durations': round_durations,
         'time_points': time_points,
         'total_time': cumulative_time,
