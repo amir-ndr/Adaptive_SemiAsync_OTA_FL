@@ -59,6 +59,15 @@ class COTAFClient:
         except Exception as e:
             logging.error(f"Client {self.client_id}: Error setting model: {str(e)}")
             raise
+
+    def compute_gradient_norm(self):
+        """Compute L2 norm of model gradients"""
+        total_norm = 0.0
+        for param in self.local_model.parameters():
+            if param.grad is not None:
+                param_norm = param.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        return math.sqrt(total_norm)
         
     def local_train(self):
         logging.info(f"Client {self.client_id}: Starting local training")
@@ -140,9 +149,15 @@ class COTAFClient:
                 start_cpu = self.global_model_start[key].cpu()
                 trained_cpu = self.local_model_trained[key].cpu()
                 
-                scaling = min(1.0, math.sqrt(self.P_max / (self.norm_squared + 1e-8)))
-                delta = scaling * (trained_cpu - start_cpu)  # NEW: Enforce power constraint
-                update[key] = delta
+                # scaling = min(1.0, math.sqrt(self.P_max / (self.norm_squared + 1e-8)))
+                # delta = scaling * (trained_cpu - start_cpu)  # NEW: Enforce power constraint
+                # update[key] = delta
+                delta = trained_cpu - start_cpu
+                full_norm = torch.norm(torch.cat([t.flatten() for t in delta.values()])).item()
+                scaling = min(1.0, math.sqrt(self.P_max) / (full_norm + 1e-8))
+                for key in delta:
+                    update[key] = scaling * delta[key]
+
 
                 param_norm = torch.norm(delta).item()
                 self.norm_squared += param_norm ** 2
@@ -157,16 +172,27 @@ class COTAFClient:
         logging.info(f"Client {self.client_id}: Update norm: {np.sqrt(self.norm_squared):.4f}")
         return update
     
-    def get_energy_consumption(self, alpha_t):
-        tx_power = alpha_t * self.norm_squared / self.last_tx_duration
-        comm_energy = tx_power * self.last_tx_duration
-        circuit_energy = 0.1 * self.last_tx_duration
-        total_energy = self.comp_energy + comm_energy + circuit_energy
+    def get_energy_consumption(self, p_k, h_k, grad_norm):
+        """
+        PAPER-COMPATIBLE ENERGY MODEL
+        p_k: Transmit power (scalar)
+        h_k: Complex channel coefficient
+        grad_norm: ||g_k|| (scalar)
+        """
+        # 1. Communication energy (Eq. 5 in paper)
+        h_mag = max(abs(h_k), 1e-8)  # Avoid division by zero
+        comm_energy = (p_k ** 2) * (grad_norm ** 2) / (h_mag ** 2)
         
-        logging.info(f"Client {self.client_id}: Energy - Comp: {self.comp_energy:.2f}J, "
-                     f"Comm: {comm_energy:.2f}J, Circuit: {circuit_energy:.2f}J, Total: {total_energy:.2f}J")
+        # 2. Computation energy (unchanged)
+        total_energy = self.comp_energy + comm_energy
+        
+        logging.info(f"Client {self.client_id}: Energy | "
+                    f"Comp: {self.comp_energy:.2f}J | "
+                    f"Comm: {comm_energy:.2f}J | "
+                    f"Total: {total_energy:.2f}J | "
+                    f"P_k: {p_k:.4f} |H|: {h_mag:.4f} ||g||: {grad_norm:.4f}")
         return total_energy
-    
+
     def reset_round(self):
         logging.info(f"Client {self.client_id}: Resetting round")
         self.comp_energy = 0.0

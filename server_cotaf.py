@@ -30,6 +30,13 @@ class COTAFServer:
         
         # Fading channel support
         self.fading_coefficients = None
+
+    def _get_client_channel(self, client_idx):
+        """Get channel coefficient for client (1.0 if no fading)"""
+        if self.fading_coefficients and client_idx < len(self.fading_coefficients):
+            return self.fading_coefficients[client_idx]
+        return 1.0 + 0j  # Default channel gain = 1
+
         
     def broadcast_model(self):
         logging.info("Broadcasting global model to clients")
@@ -185,21 +192,34 @@ class COTAFServer:
             logging.error(f"Error tracking divergence: {str(e)}")
     
     def _track_energy(self, alpha_t):
-        """Track energy consumption across all clients"""
+        """Track energy consumption across all clients (PAPER-COMPATIBLE)"""
         try:
             round_energy = 0.0
             per_client_energy = {}
             
-            for client in self.clients:
-                total_energy = client.get_energy_consumption(alpha_t)
+            for i, client in enumerate(self.clients):
+                # 1. Get channel coefficient
+                h_k = self._get_client_channel(i)
+                
+                # 2. Compute transmit power (p_k = sqrt(alpha_t * norm_squared))
+                p_k = math.sqrt(alpha_t * client.norm_squared)
+                
+                # 3. Compute gradient norm (||g_k||)
+                grad_norm = client.compute_gradient_norm()
+                
+                # 4. Get energy using paper's formula
+                total_energy = client.get_energy_consumption(p_k, h_k, grad_norm)
+                
+                # 5. Update tracking
                 self.energy_tracker['cumulative_per_client'][client.client_id] += total_energy
                 round_energy += total_energy
                 per_client_energy[client.client_id] = total_energy
-                
+            
             self.energy_tracker['per_round_total'].append(round_energy)
-            logging.info(f"Round energy tracked: {round_energy:.2f}J")
+            logging.info(f"Round energy: {round_energy:.2f}J")
         except Exception as e:
             logging.error(f"Error tracking energy: {str(e)}")
+
     
     def update_model(self, state_dict):
         """Update global model and reset client states"""

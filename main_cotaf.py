@@ -327,7 +327,7 @@ if __name__ == "__main__":
     client_data_map = partition_mnist_noniid(
         train_dataset, 
         num_clients=NUM_CLIENTS, 
-        shards_per_client=10
+        # shards_per_client=10
     )
     
     # Create clients with realistic parameters
