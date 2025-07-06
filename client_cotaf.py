@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import copy
 import time
+import math
 import logging
 from torch.utils.data import Subset, DataLoader
 
@@ -139,8 +140,10 @@ class COTAFClient:
                 start_cpu = self.global_model_start[key].cpu()
                 trained_cpu = self.local_model_trained[key].cpu()
                 
-                delta = trained_cpu - start_cpu
+                scaling = min(1.0, math.sqrt(self.P_max / (self.norm_squared + 1e-8)))
+                delta = scaling * (trained_cpu - start_cpu)  # NEW: Enforce power constraint
                 update[key] = delta
+
                 param_norm = torch.norm(delta).item()
                 self.norm_squared += param_norm ** 2
                 

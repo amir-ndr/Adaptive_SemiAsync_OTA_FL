@@ -1,0 +1,1318 @@
+2025-07-06 16:35:31,029 - INFO - Using device: cpu
+2025-07-06 16:35:31,100 - INFO - Precomputed FLOPs per sample: 41.77M
+2025-07-06 16:35:31,120 - INFO - Client 0: Model initialized on cpu
+2025-07-06 16:35:31,120 - INFO - Client 0: Created loader with 6000 samples
+2025-07-06 16:35:31,120 - INFO - Client 0: Optimizer initialized
+2025-07-06 16:35:31,126 - INFO - Client 1: Model initialized on cpu
+2025-07-06 16:35:31,126 - INFO - Client 1: Created loader with 6000 samples
+2025-07-06 16:35:31,126 - INFO - Client 1: Optimizer initialized
+2025-07-06 16:35:31,132 - INFO - Client 2: Model initialized on cpu
+2025-07-06 16:35:31,132 - INFO - Client 2: Created loader with 6000 samples
+2025-07-06 16:35:31,132 - INFO - Client 2: Optimizer initialized
+2025-07-06 16:35:31,138 - INFO - Client 3: Model initialized on cpu
+2025-07-06 16:35:31,138 - INFO - Client 3: Created loader with 6000 samples
+2025-07-06 16:35:31,138 - INFO - Client 3: Optimizer initialized
+2025-07-06 16:35:31,144 - INFO - Client 4: Model initialized on cpu
+2025-07-06 16:35:31,144 - INFO - Client 4: Created loader with 6000 samples
+2025-07-06 16:35:31,144 - INFO - Client 4: Optimizer initialized
+2025-07-06 16:35:31,152 - INFO - Client 5: Model initialized on cpu
+2025-07-06 16:35:31,152 - INFO - Client 5: Created loader with 6000 samples
+2025-07-06 16:35:31,152 - INFO - Client 5: Optimizer initialized
+2025-07-06 16:35:31,158 - INFO - Client 6: Model initialized on cpu
+2025-07-06 16:35:31,158 - INFO - Client 6: Created loader with 6000 samples
+2025-07-06 16:35:31,158 - INFO - Client 6: Optimizer initialized
+2025-07-06 16:35:31,164 - INFO - Client 7: Model initialized on cpu
+2025-07-06 16:35:31,164 - INFO - Client 7: Created loader with 6000 samples
+2025-07-06 16:35:31,165 - INFO - Client 7: Optimizer initialized
+2025-07-06 16:35:31,170 - INFO - Client 8: Model initialized on cpu
+2025-07-06 16:35:31,170 - INFO - Client 8: Created loader with 6000 samples
+2025-07-06 16:35:31,170 - INFO - Client 8: Optimizer initialized
+2025-07-06 16:35:31,177 - INFO - Client 9: Model initialized on cpu
+2025-07-06 16:35:31,178 - INFO - Client 9: Created loader with 6000 samples
+2025-07-06 16:35:31,178 - INFO - Client 9: Optimizer initialized
+2025-07-06 16:35:31,178 - INFO - Client 0: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,178 - INFO - Client 1: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,178 - INFO - Client 2: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,178 - INFO - Client 3: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,179 - INFO - Client 4: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,179 - INFO - Client 5: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,179 - INFO - Client 6: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,179 - INFO - Client 7: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,179 - INFO - Client 8: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,179 - INFO - Client 9: Optimizer: Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+2025-07-06 16:35:31,204 - INFO - Initial Global Model Stats (Round 0):
+2025-07-06 16:35:31,205 - INFO -   conv1.weight: mean=0.007238, std=0.111268, min=-0.199085, max=0.199985
+2025-07-06 16:35:31,205 - INFO -   conv1.bias: mean=-0.012057, std=0.117577, min=-0.186442, max=0.190626
+2025-07-06 16:35:31,205 - INFO -   conv2.weight: mean=-0.000004, std=0.020409, min=-0.035352, max=0.035353
+2025-07-06 16:35:31,205 - INFO -   conv2.bias: mean=-0.002003, std=0.020049, min=-0.035069, max=0.034930
+2025-07-06 16:35:31,207 - INFO -   fc1.weight: mean=0.000001, std=0.010312, min=-0.017857, max=0.017857
+2025-07-06 16:35:31,207 - INFO -   fc1.bias: mean=0.000662, std=0.010284, min=-0.017812, max=0.017797
+2025-07-06 16:35:31,207 - INFO -   fc2.weight: mean=-0.000322, std=0.025441, min=-0.044177, max=0.044185
+2025-07-06 16:35:31,207 - INFO -   fc2.bias: mean=0.012236, std=0.029032, min=-0.040389, max=0.042383
+2025-07-06 16:35:31,207 - INFO - Server initialized with 10 clients on cpu
+2025-07-06 16:35:34,086 - INFO - Initial model accuracy: 7.62%
+2025-07-06 16:35:34,086 - INFO - 
+=== Starting COTAF Experiment ===
+2025-07-06 16:35:34,086 - INFO - 
+=== Round 1/50 ===
+2025-07-06 16:35:34,086 - INFO - Pre-Broadcast Global Model Stats (Round 1):
+2025-07-06 16:35:34,086 - INFO -   conv1.weight: mean=0.007238, std=0.111268, min=-0.199085, max=0.199985
+2025-07-06 16:35:34,086 - INFO -   conv1.bias: mean=-0.012057, std=0.117577, min=-0.186442, max=0.190626
+2025-07-06 16:35:34,087 - INFO -   conv2.weight: mean=-0.000004, std=0.020409, min=-0.035352, max=0.035353
+2025-07-06 16:35:34,087 - INFO -   conv2.bias: mean=-0.002003, std=0.020049, min=-0.035069, max=0.034930
+2025-07-06 16:35:34,088 - INFO -   fc1.weight: mean=0.000001, std=0.010312, min=-0.017857, max=0.017857
+2025-07-06 16:35:34,088 - INFO -   fc1.bias: mean=0.000662, std=0.010284, min=-0.017812, max=0.017797
+2025-07-06 16:35:34,088 - INFO -   fc2.weight: mean=-0.000322, std=0.025441, min=-0.044177, max=0.044185
+2025-07-06 16:35:34,088 - INFO -   fc2.bias: mean=0.012236, std=0.029032, min=-0.040389, max=0.042383
+2025-07-06 16:35:34,088 - INFO - Broadcasting global model to clients
+2025-07-06 16:35:34,089 - INFO - Client 0: Setting new model
+2025-07-06 16:35:34,090 - INFO - Client 0: Model updated. Param change: 0.0004 → 0.0072
+2025-07-06 16:35:34,090 - INFO - Client 1: Setting new model
+2025-07-06 16:35:34,090 - INFO - Client 1: Model updated. Param change: 0.0035 → 0.0072
+2025-07-06 16:35:34,091 - INFO - Client 2: Setting new model
+2025-07-06 16:35:34,091 - INFO - Client 2: Model updated. Param change: 0.0070 → 0.0072
+2025-07-06 16:35:34,091 - INFO - Client 3: Setting new model
+2025-07-06 16:35:34,092 - INFO - Client 3: Model updated. Param change: 0.0032 → 0.0072
+2025-07-06 16:35:34,092 - INFO - Client 4: Setting new model
+2025-07-06 16:35:34,093 - INFO - Client 4: Model updated. Param change: 0.0074 → 0.0072
+2025-07-06 16:35:34,093 - INFO - Client 5: Setting new model
+2025-07-06 16:35:34,094 - INFO - Client 5: Model updated. Param change: 0.0057 → 0.0072
+2025-07-06 16:35:34,094 - INFO - Client 6: Setting new model
+2025-07-06 16:35:34,094 - INFO - Client 6: Model updated. Param change: -0.0019 → 0.0072
+2025-07-06 16:35:34,094 - INFO - Client 7: Setting new model
+2025-07-06 16:35:34,095 - INFO - Client 7: Model updated. Param change: -0.0005 → 0.0072
+2025-07-06 16:35:34,095 - INFO - Client 8: Setting new model
+2025-07-06 16:35:34,095 - INFO - Client 8: Model updated. Param change: 0.0063 → 0.0072
+2025-07-06 16:35:34,096 - INFO - Client 9: Setting new model
+2025-07-06 16:35:34,096 - INFO - Client 9: Model updated. Param change: -0.0040 → 0.0072
+2025-07-06 16:35:34,096 - INFO - Broadcast completed
+2025-07-06 16:35:34,096 - INFO - Client 0 Pre-Training Model Stats (Round 1):
+2025-07-06 16:35:34,096 - INFO -   conv1.weight: mean=0.007238, std=0.111268, min=-0.199085, max=0.199985
+2025-07-06 16:35:34,096 - INFO -   conv1.bias: mean=-0.012057, std=0.117577, min=-0.186442, max=0.190626
+2025-07-06 16:35:34,097 - INFO -   conv2.weight: mean=-0.000004, std=0.020409, min=-0.035352, max=0.035353
+2025-07-06 16:35:34,097 - INFO -   conv2.bias: mean=-0.002003, std=0.020049, min=-0.035069, max=0.034930
+2025-07-06 16:35:34,097 - INFO -   fc1.weight: mean=0.000001, std=0.010312, min=-0.017857, max=0.017857
+2025-07-06 16:35:34,098 - INFO -   fc1.bias: mean=0.000662, std=0.010284, min=-0.017812, max=0.017797
+2025-07-06 16:35:34,098 - INFO -   fc2.weight: mean=-0.000322, std=0.025441, min=-0.044177, max=0.044185
+2025-07-06 16:35:34,098 - INFO -   fc2.bias: mean=0.012236, std=0.029032, min=-0.040389, max=0.042383
+2025-07-06 16:35:34,098 - INFO - Client 0: Starting local training
+2025-07-06 16:35:34,098 - INFO - Client 0: Saved initial model state
+2025-07-06 16:35:34,098 - INFO - Client 0: Epoch 1/1
+2025-07-06 16:35:47,520 - INFO - Client 0: Training complete. Avg loss: 0.3825, Max grad: 9.4272, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:35:47,521 - INFO - Client 0: Max gradient: 1.918568
+2025-07-06 16:35:47,521 - INFO - Client 1: Starting local training
+2025-07-06 16:35:47,522 - INFO - Client 1: Saved initial model state
+2025-07-06 16:35:47,522 - INFO - Client 1: Epoch 1/1
+2025-07-06 16:35:59,383 - INFO - Client 1: Training complete. Avg loss: 0.4462, Max grad: 11.0612, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:35:59,383 - INFO - Client 1: Max gradient: 1.358879
+2025-07-06 16:35:59,383 - INFO - Client 2: Starting local training
+2025-07-06 16:35:59,384 - INFO - Client 2: Saved initial model state
+2025-07-06 16:35:59,384 - INFO - Client 2: Epoch 1/1
+2025-07-06 16:36:10,596 - INFO - Client 2: Training complete. Avg loss: 0.3860, Max grad: 4.0404, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:36:10,597 - INFO - Client 2: Max gradient: 0.994852
+2025-07-06 16:36:10,597 - INFO - Client 3: Starting local training
+2025-07-06 16:36:10,598 - INFO - Client 3: Saved initial model state
+2025-07-06 16:36:10,598 - INFO - Client 3: Epoch 1/1
+2025-07-06 16:36:24,819 - INFO - Client 3: Training complete. Avg loss: 0.5397, Max grad: 17.1409, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:36:24,820 - INFO - Client 3: Max gradient: 0.931513
+2025-07-06 16:36:24,820 - INFO - Client 4: Starting local training
+2025-07-06 16:36:24,821 - INFO - Client 4: Saved initial model state
+2025-07-06 16:36:24,821 - INFO - Client 4: Epoch 1/1
+2025-07-06 16:36:40,935 - INFO - Client 4: Training complete. Avg loss: 0.4919, Max grad: 5.8861, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:36:40,936 - INFO - Client 4: Max gradient: 1.447270
+2025-07-06 16:36:40,936 - INFO - Client 5: Starting local training
+2025-07-06 16:36:40,937 - INFO - Client 5: Saved initial model state
+2025-07-06 16:36:40,937 - INFO - Client 5: Epoch 1/1
+2025-07-06 16:36:56,280 - INFO - Client 5: Training complete. Avg loss: 0.4003, Max grad: 9.6655, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:36:56,281 - INFO - Client 5: Max gradient: 1.028918
+2025-07-06 16:36:56,281 - INFO - Client 6: Starting local training
+2025-07-06 16:36:56,282 - INFO - Client 6: Saved initial model state
+2025-07-06 16:36:56,283 - INFO - Client 6: Epoch 1/1
+2025-07-06 16:37:08,758 - INFO - Client 6: Training complete. Avg loss: 0.4504, Max grad: 7.0402, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:37:08,758 - INFO - Client 6: Max gradient: 2.322671
+2025-07-06 16:37:08,758 - INFO - Client 7: Starting local training
+2025-07-06 16:37:08,759 - INFO - Client 7: Saved initial model state
+2025-07-06 16:37:08,759 - INFO - Client 7: Epoch 1/1
+2025-07-06 16:37:20,876 - INFO - Client 7: Training complete. Avg loss: 0.4162, Max grad: 6.6478, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:37:20,877 - INFO - Client 7: Max gradient: 1.198139
+2025-07-06 16:37:20,877 - INFO - Client 8: Starting local training
+2025-07-06 16:37:20,878 - INFO - Client 8: Saved initial model state
+2025-07-06 16:37:20,878 - INFO - Client 8: Epoch 1/1
+2025-07-06 16:37:32,661 - INFO - Client 8: Training complete. Avg loss: 0.3043, Max grad: 7.6579, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:37:32,662 - INFO - Client 8: Max gradient: 0.112674
+2025-07-06 16:37:32,662 - INFO - Client 9: Starting local training
+2025-07-06 16:37:32,663 - INFO - Client 9: Saved initial model state
+2025-07-06 16:37:32,663 - INFO - Client 9: Epoch 1/1
+2025-07-06 16:37:44,301 - INFO - Client 9: Training complete. Avg loss: 0.4438, Max grad: 9.1107, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:37:44,302 - INFO - Client 9: Max gradient: 1.207432
+2025-07-06 16:37:44,302 - INFO - Average client loss: 0.4261, Max gradients: 2.322671
+2025-07-06 16:37:44,302 - INFO - Starting aggregation
+2025-07-06 16:37:44,302 - INFO - Starting aggregation
+2025-07-06 16:37:44,302 - INFO - Client 0: Getting update
+2025-07-06 16:37:44,302 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,303 - WARNING - Client 0: Large update for conv2.weight: 2.9584
+2025-07-06 16:37:44,305 - WARNING - Client 0: Large update for fc1.weight: 3.6780
+2025-07-06 16:37:44,305 - INFO - Client 0: Update norm: 4.7592
+2025-07-06 16:37:44,305 - INFO - Client 0 update: Received
+2025-07-06 16:37:44,305 - INFO - Client 1: Getting update
+2025-07-06 16:37:44,305 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,305 - WARNING - Client 1: Large update for conv2.weight: 3.1034
+2025-07-06 16:37:44,307 - WARNING - Client 1: Large update for fc1.weight: 3.6408
+2025-07-06 16:37:44,307 - INFO - Client 1: Update norm: 4.8228
+2025-07-06 16:37:44,307 - INFO - Client 1 update: Received
+2025-07-06 16:37:44,307 - INFO - Client 2: Getting update
+2025-07-06 16:37:44,307 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,307 - WARNING - Client 2: Large update for conv2.weight: 3.2163
+2025-07-06 16:37:44,308 - WARNING - Client 2: Large update for fc1.weight: 3.1008
+2025-07-06 16:37:44,309 - INFO - Client 2: Update norm: 4.5202
+2025-07-06 16:37:44,309 - INFO - Client 2 update: Received
+2025-07-06 16:37:44,309 - INFO - Client 3: Getting update
+2025-07-06 16:37:44,309 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,309 - WARNING - Client 3: Large update for conv2.weight: 3.5283
+2025-07-06 16:37:44,310 - WARNING - Client 3: Large update for fc1.weight: 3.2073
+2025-07-06 16:37:44,311 - INFO - Client 3: Update norm: 4.8194
+2025-07-06 16:37:44,311 - INFO - Client 3 update: Received
+2025-07-06 16:37:44,311 - INFO - Client 4: Getting update
+2025-07-06 16:37:44,311 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,311 - WARNING - Client 4: Large update for conv2.weight: 3.2585
+2025-07-06 16:37:44,314 - WARNING - Client 4: Large update for fc1.weight: 3.1493
+2025-07-06 16:37:44,314 - INFO - Client 4: Update norm: 4.5813
+2025-07-06 16:37:44,314 - INFO - Client 4 update: Received
+2025-07-06 16:37:44,314 - INFO - Client 5: Getting update
+2025-07-06 16:37:44,314 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,314 - WARNING - Client 5: Large update for conv2.weight: 3.5558
+2025-07-06 16:37:44,316 - WARNING - Client 5: Large update for fc1.weight: 2.7979
+2025-07-06 16:37:44,316 - INFO - Client 5: Update norm: 4.5781
+2025-07-06 16:37:44,316 - INFO - Client 5 update: Received
+2025-07-06 16:37:44,316 - INFO - Client 6: Getting update
+2025-07-06 16:37:44,316 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,317 - WARNING - Client 6: Large update for conv2.weight: 3.3114
+2025-07-06 16:37:44,319 - WARNING - Client 6: Large update for fc1.weight: 3.4528
+2025-07-06 16:37:44,319 - INFO - Client 6: Update norm: 4.8326
+2025-07-06 16:37:44,319 - INFO - Client 6 update: Received
+2025-07-06 16:37:44,319 - INFO - Client 7: Getting update
+2025-07-06 16:37:44,319 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,319 - WARNING - Client 7: Large update for conv2.weight: 3.2558
+2025-07-06 16:37:44,320 - WARNING - Client 7: Large update for fc1.weight: 2.8295
+2025-07-06 16:37:44,321 - INFO - Client 7: Update norm: 4.3643
+2025-07-06 16:37:44,321 - INFO - Client 7 update: Received
+2025-07-06 16:37:44,321 - INFO - Client 8: Getting update
+2025-07-06 16:37:44,321 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,321 - WARNING - Client 8: Large update for conv2.weight: 3.0886
+2025-07-06 16:37:44,323 - WARNING - Client 8: Large update for fc1.weight: 2.8364
+2025-07-06 16:37:44,323 - INFO - Client 8: Update norm: 4.2361
+2025-07-06 16:37:44,323 - INFO - Client 8 update: Received
+2025-07-06 16:37:44,323 - INFO - Client 9: Getting update
+2025-07-06 16:37:44,323 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,324 - WARNING - Client 9: Large update for conv2.weight: 3.3620
+2025-07-06 16:37:44,325 - WARNING - Client 9: Large update for fc1.weight: 2.7706
+2025-07-06 16:37:44,325 - INFO - Client 9: Update norm: 4.4015
+2025-07-06 16:37:44,325 - INFO - Client 9 update: Received
+2025-07-06 16:37:44,325 - INFO - Computing alpha_t
+2025-07-06 16:37:44,326 - INFO - Update 0 norm: 4.7592
+2025-07-06 16:37:44,326 - INFO - Update 1 norm: 4.8228
+2025-07-06 16:37:44,327 - INFO - Update 2 norm: 4.5202
+2025-07-06 16:37:44,328 - INFO - Update 3 norm: 4.8194
+2025-07-06 16:37:44,328 - INFO - Update 4 norm: 4.5813
+2025-07-06 16:37:44,329 - INFO - Update 5 norm: 4.5781
+2025-07-06 16:37:44,329 - INFO - Update 6 norm: 4.8326
+2025-07-06 16:37:44,330 - INFO - Update 7 norm: 4.3643
+2025-07-06 16:37:44,331 - INFO - Update 8 norm: 4.2361
+2025-07-06 16:37:44,332 - INFO - Update 9 norm: 4.4015
+2025-07-06 16:37:44,332 - INFO - Current max norm: 4.8326
+2025-07-06 16:37:44,332 - INFO - Computed alpha_t: 0.021410 (EMA norm: 4.8326)
+2025-07-06 16:37:44,332 - INFO - Applying precoding and aggregation
+2025-07-06 16:37:44,340 - INFO - Aggregated 10 client updates
+2025-07-06 16:37:44,340 - INFO - Adding channel noise
+2025-07-06 16:37:44,342 - WARNING - Large noise for conv1.weight: 0.6081
+2025-07-06 16:37:44,342 - WARNING - Large noise for conv1.bias: 0.1299
+2025-07-06 16:37:44,343 - WARNING - Large noise for conv2.weight: 4.8921
+2025-07-06 16:37:44,343 - WARNING - Large noise for conv2.bias: 0.1810
+2025-07-06 16:37:44,363 - WARNING - Large noise for fc1.weight: 27.3999
+2025-07-06 16:37:44,364 - WARNING - Large noise for fc1.bias: 0.4832
+2025-07-06 16:37:44,364 - WARNING - Large noise for fc2.weight: 1.5516
+2025-07-06 16:37:44,364 - INFO - Applying server-side scaling
+2025-07-06 16:37:44,364 - WARNING - Large update for conv2.weight: 4.2769, clipping
+2025-07-06 16:37:44,365 - WARNING - Large update for fc1.weight: 18.8426, clipping
+2025-07-06 16:37:44,366 - WARNING - Large update for fc2.weight: 1.0635, clipping
+2025-07-06 16:37:44,376 - INFO - Divergence tracked: 1536.4029
+2025-07-06 16:37:44,376 - INFO - Client 0: Energy - Comp: 1623.47J, Comm: 0.48J, Circuit: 0.06J, Total: 1624.01J
+2025-07-06 16:37:44,376 - INFO - Client 1: Energy - Comp: 625.33J, Comm: 0.50J, Circuit: 0.06J, Total: 625.89J
+2025-07-06 16:37:44,376 - INFO - Client 2: Energy - Comp: 866.17J, Comm: 0.44J, Circuit: 0.06J, Total: 866.67J
+2025-07-06 16:37:44,376 - INFO - Client 3: Energy - Comp: 428.25J, Comm: 0.50J, Circuit: 0.06J, Total: 428.81J
+2025-07-06 16:37:44,376 - INFO - Client 4: Energy - Comp: 882.26J, Comm: 0.45J, Circuit: 0.06J, Total: 882.77J
+2025-07-06 16:37:44,376 - INFO - Client 5: Energy - Comp: 1167.60J, Comm: 0.45J, Circuit: 0.06J, Total: 1168.11J
+2025-07-06 16:37:44,376 - INFO - Client 6: Energy - Comp: 1483.04J, Comm: 0.50J, Circuit: 0.06J, Total: 1483.60J
+2025-07-06 16:37:44,376 - INFO - Client 7: Energy - Comp: 539.17J, Comm: 0.41J, Circuit: 0.06J, Total: 539.64J
+2025-07-06 16:37:44,376 - INFO - Client 8: Energy - Comp: 1297.66J, Comm: 0.38J, Circuit: 0.06J, Total: 1298.11J
+2025-07-06 16:37:44,376 - INFO - Client 9: Energy - Comp: 1982.89J, Comm: 0.41J, Circuit: 0.06J, Total: 1983.37J
+2025-07-06 16:37:44,376 - INFO - Round energy tracked: 10900.97J
+2025-07-06 16:37:44,376 - INFO - Aggregation completed in 0.0740s
+2025-07-06 16:37:44,384 - INFO - Aggregated Model Stats (Round 1):
+2025-07-06 16:37:44,384 - INFO -   conv1.weight: mean=0.017570, std=0.117817, min=-0.237885, max=0.238565
+2025-07-06 16:37:44,384 - INFO -   conv1.bias: mean=-0.009051, std=0.102613, min=-0.173379, max=0.163286
+2025-07-06 16:37:44,384 - INFO -   conv2.weight: mean=-0.000245, std=0.021039, min=-0.048262, max=0.051851
+2025-07-06 16:37:44,384 - INFO -   conv2.bias: mean=-0.001549, std=0.024511, min=-0.049656, max=0.045670
+2025-07-06 16:37:44,385 - INFO -   fc1.weight: mean=0.000000, std=0.010291, min=-0.020481, max=0.020875
+2025-07-06 16:37:44,385 - INFO -   fc1.bias: mean=0.000310, std=0.018188, min=-0.051098, max=0.059443
+2025-07-06 16:37:44,385 - INFO -   fc2.weight: mean=-0.000711, std=0.028719, min=-0.086599, max=0.083630
+2025-07-06 16:37:44,385 - INFO -   fc2.bias: mean=0.006512, std=0.023851, min=-0.034078, max=0.036766
+2025-07-06 16:37:44,385 - INFO - Updating global model
+2025-07-06 16:37:44,386 - INFO - Client 0: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 1: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 2: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 3: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 4: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 5: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 6: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 7: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 8: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 9: Resetting round
+2025-07-06 16:37:44,386 - INFO - Client 0: Getting update
+2025-07-06 16:37:44,386 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,387 - WARNING - Client 0: Large update for conv2.weight: 2.9584
+2025-07-06 16:37:44,388 - WARNING - Client 0: Large update for fc1.weight: 3.6780
+2025-07-06 16:37:44,388 - INFO - Client 0: Update norm: 4.7592
+2025-07-06 16:37:44,388 - INFO - Client 1: Getting update
+2025-07-06 16:37:44,388 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,388 - WARNING - Client 1: Large update for conv2.weight: 3.1034
+2025-07-06 16:37:44,390 - WARNING - Client 1: Large update for fc1.weight: 3.6408
+2025-07-06 16:37:44,390 - INFO - Client 1: Update norm: 4.8228
+2025-07-06 16:37:44,390 - INFO - Client 2: Getting update
+2025-07-06 16:37:44,390 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,390 - WARNING - Client 2: Large update for conv2.weight: 3.2163
+2025-07-06 16:37:44,391 - WARNING - Client 2: Large update for fc1.weight: 3.1008
+2025-07-06 16:37:44,392 - INFO - Client 2: Update norm: 4.5202
+2025-07-06 16:37:44,392 - INFO - Client 3: Getting update
+2025-07-06 16:37:44,392 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,392 - WARNING - Client 3: Large update for conv2.weight: 3.5283
+2025-07-06 16:37:44,393 - WARNING - Client 3: Large update for fc1.weight: 3.2073
+2025-07-06 16:37:44,393 - INFO - Client 3: Update norm: 4.8194
+2025-07-06 16:37:44,393 - INFO - Client 4: Getting update
+2025-07-06 16:37:44,393 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,394 - WARNING - Client 4: Large update for conv2.weight: 3.2585
+2025-07-06 16:37:44,395 - WARNING - Client 4: Large update for fc1.weight: 3.1493
+2025-07-06 16:37:44,395 - INFO - Client 4: Update norm: 4.5813
+2025-07-06 16:37:44,395 - INFO - Client 5: Getting update
+2025-07-06 16:37:44,395 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,395 - WARNING - Client 5: Large update for conv2.weight: 3.5558
+2025-07-06 16:37:44,396 - WARNING - Client 5: Large update for fc1.weight: 2.7979
+2025-07-06 16:37:44,397 - INFO - Client 5: Update norm: 4.5781
+2025-07-06 16:37:44,397 - INFO - Client 6: Getting update
+2025-07-06 16:37:44,397 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,397 - WARNING - Client 6: Large update for conv2.weight: 3.3114
+2025-07-06 16:37:44,399 - WARNING - Client 6: Large update for fc1.weight: 3.4528
+2025-07-06 16:37:44,399 - INFO - Client 6: Update norm: 4.8326
+2025-07-06 16:37:44,399 - INFO - Client 7: Getting update
+2025-07-06 16:37:44,399 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,400 - WARNING - Client 7: Large update for conv2.weight: 3.2558
+2025-07-06 16:37:44,401 - WARNING - Client 7: Large update for fc1.weight: 2.8295
+2025-07-06 16:37:44,401 - INFO - Client 7: Update norm: 4.3643
+2025-07-06 16:37:44,401 - INFO - Client 8: Getting update
+2025-07-06 16:37:44,401 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,401 - WARNING - Client 8: Large update for conv2.weight: 3.0886
+2025-07-06 16:37:44,403 - WARNING - Client 8: Large update for fc1.weight: 2.8364
+2025-07-06 16:37:44,403 - INFO - Client 8: Update norm: 4.2361
+2025-07-06 16:37:44,403 - INFO - Client 9: Getting update
+2025-07-06 16:37:44,403 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:37:44,403 - WARNING - Client 9: Large update for conv2.weight: 3.3620
+2025-07-06 16:37:44,405 - WARNING - Client 9: Large update for fc1.weight: 2.7706
+2025-07-06 16:37:44,405 - INFO - Client 9: Update norm: 4.4015
+2025-07-06 16:37:44,405 - INFO - Valid updates: 10/10
+2025-07-06 16:37:44,405 - INFO - Computing alpha_t
+2025-07-06 16:37:44,406 - INFO - Update 0 norm: 4.7592
+2025-07-06 16:37:44,406 - INFO - Update 1 norm: 4.8228
+2025-07-06 16:37:44,407 - INFO - Update 2 norm: 4.5202
+2025-07-06 16:37:44,407 - INFO - Update 3 norm: 4.8194
+2025-07-06 16:37:44,408 - INFO - Update 4 norm: 4.5813
+2025-07-06 16:37:44,409 - INFO - Update 5 norm: 4.5781
+2025-07-06 16:37:44,409 - INFO - Update 6 norm: 4.8326
+2025-07-06 16:37:44,410 - INFO - Update 7 norm: 4.3643
+2025-07-06 16:37:44,411 - INFO - Update 8 norm: 4.2361
+2025-07-06 16:37:44,411 - INFO - Update 9 norm: 4.4015
+2025-07-06 16:37:44,411 - INFO - Current max norm: 4.8326
+2025-07-06 16:37:44,411 - INFO - Computed alpha_t: 0.021410 (EMA norm: 4.8326)
+2025-07-06 16:37:44,411 - INFO - Model divergence: 1536.4029
+2025-07-06 16:37:44,411 - INFO - Round energy: 10900.97J
+2025-07-06 16:37:44,413 - INFO - Round duration: 130.2999s | Cumulative time: 130.30s
+2025-07-06 16:37:44,413 - INFO - 
+=== Round 2/50 ===
+2025-07-06 16:37:44,413 - INFO - Pre-Broadcast Global Model Stats (Round 2):
+2025-07-06 16:37:44,413 - INFO -   conv1.weight: mean=0.017570, std=0.117817, min=-0.237885, max=0.238565
+2025-07-06 16:37:44,413 - INFO -   conv1.bias: mean=-0.009051, std=0.102613, min=-0.173379, max=0.163286
+2025-07-06 16:37:44,413 - INFO -   conv2.weight: mean=-0.000245, std=0.021039, min=-0.048262, max=0.051851
+2025-07-06 16:37:44,413 - INFO -   conv2.bias: mean=-0.001549, std=0.024511, min=-0.049656, max=0.045670
+2025-07-06 16:37:44,414 - INFO -   fc1.weight: mean=0.000000, std=0.010291, min=-0.020481, max=0.020875
+2025-07-06 16:37:44,414 - INFO -   fc1.bias: mean=0.000310, std=0.018188, min=-0.051098, max=0.059443
+2025-07-06 16:37:44,414 - INFO -   fc2.weight: mean=-0.000711, std=0.028719, min=-0.086599, max=0.083630
+2025-07-06 16:37:44,414 - INFO -   fc2.bias: mean=0.006512, std=0.023851, min=-0.034078, max=0.036766
+2025-07-06 16:37:44,414 - INFO - Broadcasting global model to clients
+2025-07-06 16:37:44,416 - INFO - Client 0: Setting new model
+2025-07-06 16:37:44,417 - INFO - Client 0: Model updated. Param change: 0.0159 → 0.0176
+2025-07-06 16:37:44,417 - INFO - Client 1: Setting new model
+2025-07-06 16:37:44,418 - INFO - Client 1: Model updated. Param change: 0.0170 → 0.0176
+2025-07-06 16:37:44,418 - INFO - Client 2: Setting new model
+2025-07-06 16:37:44,418 - INFO - Client 2: Model updated. Param change: 0.0201 → 0.0176
+2025-07-06 16:37:44,418 - INFO - Client 3: Setting new model
+2025-07-06 16:37:44,419 - INFO - Client 3: Model updated. Param change: 0.0158 → 0.0176
+2025-07-06 16:37:44,419 - INFO - Client 4: Setting new model
+2025-07-06 16:37:44,419 - INFO - Client 4: Model updated. Param change: 0.0159 → 0.0176
+2025-07-06 16:37:44,419 - INFO - Client 5: Setting new model
+2025-07-06 16:37:44,420 - INFO - Client 5: Model updated. Param change: 0.0188 → 0.0176
+2025-07-06 16:37:44,420 - INFO - Client 6: Setting new model
+2025-07-06 16:37:44,420 - INFO - Client 6: Model updated. Param change: 0.0169 → 0.0176
+2025-07-06 16:37:44,421 - INFO - Client 7: Setting new model
+2025-07-06 16:37:44,421 - INFO - Client 7: Model updated. Param change: 0.0182 → 0.0176
+2025-07-06 16:37:44,421 - INFO - Client 8: Setting new model
+2025-07-06 16:37:44,422 - INFO - Client 8: Model updated. Param change: 0.0194 → 0.0176
+2025-07-06 16:37:44,422 - INFO - Client 9: Setting new model
+2025-07-06 16:37:44,422 - INFO - Client 9: Model updated. Param change: 0.0163 → 0.0176
+2025-07-06 16:37:44,422 - INFO - Broadcast completed
+2025-07-06 16:37:44,422 - INFO - Client 0 Pre-Training Model Stats (Round 2):
+2025-07-06 16:37:44,422 - INFO -   conv1.weight: mean=0.017570, std=0.117817, min=-0.237885, max=0.238565
+2025-07-06 16:37:44,422 - INFO -   conv1.bias: mean=-0.009051, std=0.102613, min=-0.173379, max=0.163286
+2025-07-06 16:37:44,422 - INFO -   conv2.weight: mean=-0.000245, std=0.021039, min=-0.048262, max=0.051851
+2025-07-06 16:37:44,422 - INFO -   conv2.bias: mean=-0.001549, std=0.024511, min=-0.049656, max=0.045670
+2025-07-06 16:37:44,423 - INFO -   fc1.weight: mean=0.000000, std=0.010291, min=-0.020481, max=0.020875
+2025-07-06 16:37:44,423 - INFO -   fc1.bias: mean=0.000310, std=0.018188, min=-0.051098, max=0.059443
+2025-07-06 16:37:44,423 - INFO -   fc2.weight: mean=-0.000711, std=0.028719, min=-0.086599, max=0.083630
+2025-07-06 16:37:44,424 - INFO -   fc2.bias: mean=0.006512, std=0.023851, min=-0.034078, max=0.036766
+2025-07-06 16:37:44,424 - INFO - Client 0: Starting local training
+2025-07-06 16:37:44,424 - INFO - Client 0: Saved initial model state
+2025-07-06 16:37:44,424 - INFO - Client 0: Epoch 1/1
+2025-07-06 16:37:56,548 - INFO - Client 0: Training complete. Avg loss: 0.2564, Max grad: 8.1128, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:37:56,550 - INFO - Client 0: Max gradient: 0.573768
+2025-07-06 16:37:56,550 - INFO - Client 1: Starting local training
+2025-07-06 16:37:56,551 - INFO - Client 1: Saved initial model state
+2025-07-06 16:37:56,551 - INFO - Client 1: Epoch 1/1
+2025-07-06 16:38:08,336 - INFO - Client 1: Training complete. Avg loss: 0.3176, Max grad: 14.1043, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:38:08,337 - INFO - Client 1: Max gradient: 1.384696
+2025-07-06 16:38:08,337 - INFO - Client 2: Starting local training
+2025-07-06 16:38:08,338 - INFO - Client 2: Saved initial model state
+2025-07-06 16:38:08,338 - INFO - Client 2: Epoch 1/1
+2025-07-06 16:38:20,764 - INFO - Client 2: Training complete. Avg loss: 0.2768, Max grad: 5.0459, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:38:20,766 - INFO - Client 2: Max gradient: 0.667675
+2025-07-06 16:38:20,766 - INFO - Client 3: Starting local training
+2025-07-06 16:38:20,767 - INFO - Client 3: Saved initial model state
+2025-07-06 16:38:20,767 - INFO - Client 3: Epoch 1/1
+2025-07-06 16:38:33,648 - INFO - Client 3: Training complete. Avg loss: 0.3521, Max grad: 9.6564, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:38:33,648 - INFO - Client 3: Max gradient: 0.961835
+2025-07-06 16:38:33,648 - INFO - Client 4: Starting local training
+2025-07-06 16:38:33,649 - INFO - Client 4: Saved initial model state
+2025-07-06 16:38:33,649 - INFO - Client 4: Epoch 1/1
+2025-07-06 16:38:46,144 - INFO - Client 4: Training complete. Avg loss: 0.3480, Max grad: 9.7721, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:38:46,146 - INFO - Client 4: Max gradient: 1.454189
+2025-07-06 16:38:46,146 - INFO - Client 5: Starting local training
+2025-07-06 16:38:46,147 - INFO - Client 5: Saved initial model state
+2025-07-06 16:38:46,147 - INFO - Client 5: Epoch 1/1
+2025-07-06 16:38:58,873 - INFO - Client 5: Training complete. Avg loss: 0.3036, Max grad: 14.0921, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:38:58,875 - INFO - Client 5: Max gradient: 0.253191
+2025-07-06 16:38:58,875 - INFO - Client 6: Starting local training
+2025-07-06 16:38:58,875 - INFO - Client 6: Saved initial model state
+2025-07-06 16:38:58,875 - INFO - Client 6: Epoch 1/1
+2025-07-06 16:39:11,781 - INFO - Client 6: Training complete. Avg loss: 0.2941, Max grad: 7.2327, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:39:11,783 - INFO - Client 6: Max gradient: 1.168623
+2025-07-06 16:39:11,783 - INFO - Client 7: Starting local training
+2025-07-06 16:39:11,784 - INFO - Client 7: Saved initial model state
+2025-07-06 16:39:11,784 - INFO - Client 7: Epoch 1/1
+2025-07-06 16:39:24,320 - INFO - Client 7: Training complete. Avg loss: 0.2973, Max grad: 7.5516, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:39:24,322 - INFO - Client 7: Max gradient: 0.386307
+2025-07-06 16:39:24,322 - INFO - Client 8: Starting local training
+2025-07-06 16:39:24,323 - INFO - Client 8: Saved initial model state
+2025-07-06 16:39:24,323 - INFO - Client 8: Epoch 1/1
+2025-07-06 16:39:37,525 - INFO - Client 8: Training complete. Avg loss: 0.2276, Max grad: 7.3585, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:39:37,526 - INFO - Client 8: Max gradient: 1.041308
+2025-07-06 16:39:37,527 - INFO - Client 9: Starting local training
+2025-07-06 16:39:37,527 - INFO - Client 9: Saved initial model state
+2025-07-06 16:39:37,527 - INFO - Client 9: Epoch 1/1
+2025-07-06 16:39:50,662 - INFO - Client 9: Training complete. Avg loss: 0.2972, Max grad: 4.9637, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:39:50,664 - INFO - Client 9: Max gradient: 1.929849
+2025-07-06 16:39:50,664 - INFO - Average client loss: 0.2971, Max gradients: 1.929849
+2025-07-06 16:39:50,664 - INFO - Starting aggregation
+2025-07-06 16:39:50,664 - INFO - Starting aggregation
+2025-07-06 16:39:50,664 - INFO - Client 0: Getting update
+2025-07-06 16:39:50,664 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,665 - WARNING - Client 0: Large update for conv2.weight: 2.4836
+2025-07-06 16:39:50,666 - WARNING - Client 0: Large update for fc1.weight: 4.5645
+2025-07-06 16:39:50,666 - INFO - Client 0: Update norm: 5.2146
+2025-07-06 16:39:50,666 - INFO - Client 0 update: Received
+2025-07-06 16:39:50,666 - INFO - Client 1: Getting update
+2025-07-06 16:39:50,666 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,667 - WARNING - Client 1: Large update for conv2.weight: 2.7339
+2025-07-06 16:39:50,669 - WARNING - Client 1: Large update for fc1.weight: 4.3972
+2025-07-06 16:39:50,669 - INFO - Client 1: Update norm: 5.1970
+2025-07-06 16:39:50,669 - INFO - Client 1 update: Received
+2025-07-06 16:39:50,669 - INFO - Client 2: Getting update
+2025-07-06 16:39:50,669 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,669 - WARNING - Client 2: Large update for conv2.weight: 2.6226
+2025-07-06 16:39:50,671 - WARNING - Client 2: Large update for fc1.weight: 4.0860
+2025-07-06 16:39:50,672 - INFO - Client 2: Update norm: 4.8748
+2025-07-06 16:39:50,672 - INFO - Client 2 update: Received
+2025-07-06 16:39:50,672 - INFO - Client 3: Getting update
+2025-07-06 16:39:50,672 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,672 - WARNING - Client 3: Large update for conv2.weight: 2.7889
+2025-07-06 16:39:50,673 - WARNING - Client 3: Large update for fc1.weight: 4.2142
+2025-07-06 16:39:50,673 - INFO - Client 3: Update norm: 5.0726
+2025-07-06 16:39:50,673 - INFO - Client 3 update: Received
+2025-07-06 16:39:50,673 - INFO - Client 4: Getting update
+2025-07-06 16:39:50,673 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,673 - WARNING - Client 4: Large update for conv2.weight: 2.7137
+2025-07-06 16:39:50,675 - WARNING - Client 4: Large update for fc1.weight: 4.0396
+2025-07-06 16:39:50,675 - INFO - Client 4: Update norm: 4.8888
+2025-07-06 16:39:50,675 - INFO - Client 4 update: Received
+2025-07-06 16:39:50,675 - INFO - Client 5: Getting update
+2025-07-06 16:39:50,675 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,675 - WARNING - Client 5: Large update for conv2.weight: 2.9999
+2025-07-06 16:39:50,676 - WARNING - Client 5: Large update for fc1.weight: 3.5303
+2025-07-06 16:39:50,677 - INFO - Client 5: Update norm: 4.6581
+2025-07-06 16:39:50,677 - INFO - Client 5 update: Received
+2025-07-06 16:39:50,677 - INFO - Client 6: Getting update
+2025-07-06 16:39:50,677 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,677 - WARNING - Client 6: Large update for conv2.weight: 2.5362
+2025-07-06 16:39:50,678 - WARNING - Client 6: Large update for fc1.weight: 4.6284
+2025-07-06 16:39:50,678 - INFO - Client 6: Update norm: 5.2940
+2025-07-06 16:39:50,678 - INFO - Client 6 update: Received
+2025-07-06 16:39:50,679 - INFO - Client 7: Getting update
+2025-07-06 16:39:50,679 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,679 - WARNING - Client 7: Large update for conv2.weight: 2.7175
+2025-07-06 16:39:50,680 - WARNING - Client 7: Large update for fc1.weight: 3.4852
+2025-07-06 16:39:50,680 - INFO - Client 7: Update norm: 4.4410
+2025-07-06 16:39:50,680 - INFO - Client 7 update: Received
+2025-07-06 16:39:50,680 - INFO - Client 8: Getting update
+2025-07-06 16:39:50,680 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,681 - WARNING - Client 8: Large update for conv2.weight: 2.6701
+2025-07-06 16:39:50,682 - WARNING - Client 8: Large update for fc1.weight: 3.5264
+2025-07-06 16:39:50,683 - INFO - Client 8: Update norm: 4.4446
+2025-07-06 16:39:50,683 - INFO - Client 8 update: Received
+2025-07-06 16:39:50,683 - INFO - Client 9: Getting update
+2025-07-06 16:39:50,683 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,683 - WARNING - Client 9: Large update for conv2.weight: 2.6706
+2025-07-06 16:39:50,685 - WARNING - Client 9: Large update for fc1.weight: 3.7365
+2025-07-06 16:39:50,686 - INFO - Client 9: Update norm: 4.6125
+2025-07-06 16:39:50,686 - INFO - Client 9 update: Received
+2025-07-06 16:39:50,686 - INFO - Computing alpha_t
+2025-07-06 16:39:50,686 - INFO - Update 0 norm: 5.2146
+2025-07-06 16:39:50,687 - INFO - Update 1 norm: 5.1970
+2025-07-06 16:39:50,688 - INFO - Update 2 norm: 4.8748
+2025-07-06 16:39:50,689 - INFO - Update 3 norm: 5.0726
+2025-07-06 16:39:50,689 - INFO - Update 4 norm: 4.8888
+2025-07-06 16:39:50,691 - INFO - Update 5 norm: 4.6581
+2025-07-06 16:39:50,692 - INFO - Update 6 norm: 5.2940
+2025-07-06 16:39:50,692 - INFO - Update 7 norm: 4.4410
+2025-07-06 16:39:50,693 - INFO - Update 8 norm: 4.4446
+2025-07-06 16:39:50,694 - INFO - Update 9 norm: 4.6125
+2025-07-06 16:39:50,694 - INFO - Current max norm: 5.2940
+2025-07-06 16:39:50,694 - INFO - Computed alpha_t: 0.020990 (EMA norm: 4.8807)
+2025-07-06 16:39:50,694 - INFO - Applying precoding and aggregation
+2025-07-06 16:39:50,704 - INFO - Aggregated 10 client updates
+2025-07-06 16:39:50,704 - INFO - Adding channel noise
+2025-07-06 16:39:50,704 - WARNING - Large noise for conv1.weight: 0.6213
+2025-07-06 16:39:50,705 - WARNING - Large noise for conv1.bias: 0.1431
+2025-07-06 16:39:50,705 - WARNING - Large noise for conv2.weight: 4.9100
+2025-07-06 16:39:50,705 - WARNING - Large noise for conv2.bias: 0.1885
+2025-07-06 16:39:50,732 - WARNING - Large noise for fc1.weight: 27.6732
+2025-07-06 16:39:50,732 - WARNING - Large noise for fc1.bias: 0.4918
+2025-07-06 16:39:50,732 - WARNING - Large noise for fc2.weight: 1.5562
+2025-07-06 16:39:50,732 - INFO - Applying server-side scaling
+2025-07-06 16:39:50,733 - WARNING - Large update for conv2.weight: 4.1460, clipping
+2025-07-06 16:39:50,734 - WARNING - Large update for fc1.weight: 19.2621, clipping
+2025-07-06 16:39:50,735 - WARNING - Large update for fc2.weight: 1.0757, clipping
+2025-07-06 16:39:50,751 - INFO - Divergence tracked: 1647.2085
+2025-07-06 16:39:50,751 - INFO - Client 0: Energy - Comp: 1623.47J, Comm: 0.57J, Circuit: 0.06J, Total: 1624.10J
+2025-07-06 16:39:50,751 - INFO - Client 1: Energy - Comp: 625.33J, Comm: 0.57J, Circuit: 0.06J, Total: 625.96J
+2025-07-06 16:39:50,751 - INFO - Client 2: Energy - Comp: 866.17J, Comm: 0.50J, Circuit: 0.06J, Total: 866.73J
+2025-07-06 16:39:50,751 - INFO - Client 3: Energy - Comp: 428.25J, Comm: 0.54J, Circuit: 0.06J, Total: 428.85J
+2025-07-06 16:39:50,751 - INFO - Client 4: Energy - Comp: 882.26J, Comm: 0.50J, Circuit: 0.06J, Total: 882.82J
+2025-07-06 16:39:50,751 - INFO - Client 5: Energy - Comp: 1167.60J, Comm: 0.46J, Circuit: 0.06J, Total: 1168.12J
+2025-07-06 16:39:50,752 - INFO - Client 6: Energy - Comp: 1483.04J, Comm: 0.59J, Circuit: 0.06J, Total: 1483.69J
+2025-07-06 16:39:50,752 - INFO - Client 7: Energy - Comp: 539.17J, Comm: 0.41J, Circuit: 0.06J, Total: 539.65J
+2025-07-06 16:39:50,752 - INFO - Client 8: Energy - Comp: 1297.66J, Comm: 0.41J, Circuit: 0.06J, Total: 1298.14J
+2025-07-06 16:39:50,752 - INFO - Client 9: Energy - Comp: 1982.89J, Comm: 0.45J, Circuit: 0.06J, Total: 1983.40J
+2025-07-06 16:39:50,752 - INFO - Round energy tracked: 10901.45J
+2025-07-06 16:39:50,752 - INFO - Aggregation completed in 0.0877s
+2025-07-06 16:39:50,758 - INFO - Aggregated Model Stats (Round 2):
+2025-07-06 16:39:50,759 - INFO -   conv1.weight: mean=0.016497, std=0.125273, min=-0.267557, max=0.259991
+2025-07-06 16:39:50,759 - INFO -   conv1.bias: mean=-0.021021, std=0.099849, min=-0.183716, max=0.166155
+2025-07-06 16:39:50,759 - INFO -   conv2.weight: mean=-0.000799, std=0.021889, min=-0.062079, max=0.058938
+2025-07-06 16:39:50,759 - INFO -   conv2.bias: mean=-0.004495, std=0.030943, min=-0.062890, max=0.053375
+2025-07-06 16:39:50,760 - INFO -   fc1.weight: mean=0.000006, std=0.010296, min=-0.022044, max=0.021888
+2025-07-06 16:39:50,760 - INFO -   fc1.bias: mean=0.000546, std=0.023334, min=-0.076481, max=0.062322
+2025-07-06 16:39:50,760 - INFO -   fc2.weight: mean=-0.001171, std=0.032240, min=-0.096880, max=0.097229
+2025-07-06 16:39:50,760 - INFO -   fc2.bias: mean=0.007619, std=0.030222, min=-0.051017, max=0.042329
+2025-07-06 16:39:50,760 - INFO - Updating global model
+2025-07-06 16:39:50,760 - INFO - Client 0: Resetting round
+2025-07-06 16:39:50,760 - INFO - Client 1: Resetting round
+2025-07-06 16:39:50,760 - INFO - Client 2: Resetting round
+2025-07-06 16:39:50,760 - INFO - Client 3: Resetting round
+2025-07-06 16:39:50,760 - INFO - Client 4: Resetting round
+2025-07-06 16:39:50,760 - INFO - Client 5: Resetting round
+2025-07-06 16:39:50,760 - INFO - Client 6: Resetting round
+2025-07-06 16:39:50,760 - INFO - Client 7: Resetting round
+2025-07-06 16:39:50,761 - INFO - Client 8: Resetting round
+2025-07-06 16:39:50,761 - INFO - Client 9: Resetting round
+2025-07-06 16:39:50,761 - INFO - Client 0: Getting update
+2025-07-06 16:39:50,761 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,761 - WARNING - Client 0: Large update for conv2.weight: 2.4836
+2025-07-06 16:39:50,763 - WARNING - Client 0: Large update for fc1.weight: 4.5645
+2025-07-06 16:39:50,763 - INFO - Client 0: Update norm: 5.2146
+2025-07-06 16:39:50,763 - INFO - Client 1: Getting update
+2025-07-06 16:39:50,763 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,764 - WARNING - Client 1: Large update for conv2.weight: 2.7339
+2025-07-06 16:39:50,765 - WARNING - Client 1: Large update for fc1.weight: 4.3972
+2025-07-06 16:39:50,765 - INFO - Client 1: Update norm: 5.1970
+2025-07-06 16:39:50,765 - INFO - Client 2: Getting update
+2025-07-06 16:39:50,765 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,765 - WARNING - Client 2: Large update for conv2.weight: 2.6226
+2025-07-06 16:39:50,767 - WARNING - Client 2: Large update for fc1.weight: 4.0860
+2025-07-06 16:39:50,767 - INFO - Client 2: Update norm: 4.8748
+2025-07-06 16:39:50,767 - INFO - Client 3: Getting update
+2025-07-06 16:39:50,767 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,767 - WARNING - Client 3: Large update for conv2.weight: 2.7889
+2025-07-06 16:39:50,768 - WARNING - Client 3: Large update for fc1.weight: 4.2142
+2025-07-06 16:39:50,768 - INFO - Client 3: Update norm: 5.0726
+2025-07-06 16:39:50,768 - INFO - Client 4: Getting update
+2025-07-06 16:39:50,768 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,768 - WARNING - Client 4: Large update for conv2.weight: 2.7137
+2025-07-06 16:39:50,770 - WARNING - Client 4: Large update for fc1.weight: 4.0396
+2025-07-06 16:39:50,770 - INFO - Client 4: Update norm: 4.8888
+2025-07-06 16:39:50,770 - INFO - Client 5: Getting update
+2025-07-06 16:39:50,770 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,770 - WARNING - Client 5: Large update for conv2.weight: 2.9999
+2025-07-06 16:39:50,772 - WARNING - Client 5: Large update for fc1.weight: 3.5303
+2025-07-06 16:39:50,772 - INFO - Client 5: Update norm: 4.6581
+2025-07-06 16:39:50,772 - INFO - Client 6: Getting update
+2025-07-06 16:39:50,772 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,772 - WARNING - Client 6: Large update for conv2.weight: 2.5362
+2025-07-06 16:39:50,773 - WARNING - Client 6: Large update for fc1.weight: 4.6284
+2025-07-06 16:39:50,774 - INFO - Client 6: Update norm: 5.2940
+2025-07-06 16:39:50,774 - INFO - Client 7: Getting update
+2025-07-06 16:39:50,774 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,774 - WARNING - Client 7: Large update for conv2.weight: 2.7175
+2025-07-06 16:39:50,775 - WARNING - Client 7: Large update for fc1.weight: 3.4852
+2025-07-06 16:39:50,775 - INFO - Client 7: Update norm: 4.4410
+2025-07-06 16:39:50,775 - INFO - Client 8: Getting update
+2025-07-06 16:39:50,776 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,776 - WARNING - Client 8: Large update for conv2.weight: 2.6701
+2025-07-06 16:39:50,777 - WARNING - Client 8: Large update for fc1.weight: 3.5264
+2025-07-06 16:39:50,777 - INFO - Client 8: Update norm: 4.4446
+2025-07-06 16:39:50,777 - INFO - Client 9: Getting update
+2025-07-06 16:39:50,777 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:39:50,778 - WARNING - Client 9: Large update for conv2.weight: 2.6706
+2025-07-06 16:39:50,779 - WARNING - Client 9: Large update for fc1.weight: 3.7365
+2025-07-06 16:39:50,779 - INFO - Client 9: Update norm: 4.6125
+2025-07-06 16:39:50,781 - INFO - Valid updates: 10/10
+2025-07-06 16:39:50,781 - INFO - Computing alpha_t
+2025-07-06 16:39:50,781 - INFO - Update 0 norm: 5.2146
+2025-07-06 16:39:50,782 - INFO - Update 1 norm: 5.1970
+2025-07-06 16:39:50,783 - INFO - Update 2 norm: 4.8748
+2025-07-06 16:39:50,783 - INFO - Update 3 norm: 5.0726
+2025-07-06 16:39:50,784 - INFO - Update 4 norm: 4.8888
+2025-07-06 16:39:50,784 - INFO - Update 5 norm: 4.6581
+2025-07-06 16:39:50,785 - INFO - Update 6 norm: 5.2940
+2025-07-06 16:39:50,786 - INFO - Update 7 norm: 4.4410
+2025-07-06 16:39:50,786 - INFO - Update 8 norm: 4.4446
+2025-07-06 16:39:50,787 - INFO - Update 9 norm: 4.6125
+2025-07-06 16:39:50,787 - INFO - Current max norm: 5.2940
+2025-07-06 16:39:50,787 - INFO - Computed alpha_t: 0.020626 (EMA norm: 4.9236)
+2025-07-06 16:39:50,787 - INFO - Model divergence: 1647.2085
+2025-07-06 16:39:50,787 - INFO - Round energy: 21802.42J
+2025-07-06 16:39:50,788 - INFO - Round duration: 126.3480s | Cumulative time: 256.65s
+2025-07-06 16:39:50,788 - INFO - 
+=== Round 3/50 ===
+2025-07-06 16:39:50,788 - INFO - Pre-Broadcast Global Model Stats (Round 3):
+2025-07-06 16:39:50,788 - INFO -   conv1.weight: mean=0.016497, std=0.125273, min=-0.267557, max=0.259991
+2025-07-06 16:39:50,789 - INFO -   conv1.bias: mean=-0.021021, std=0.099849, min=-0.183716, max=0.166155
+2025-07-06 16:39:50,789 - INFO -   conv2.weight: mean=-0.000799, std=0.021889, min=-0.062079, max=0.058938
+2025-07-06 16:39:50,789 - INFO -   conv2.bias: mean=-0.004495, std=0.030943, min=-0.062890, max=0.053375
+2025-07-06 16:39:50,790 - INFO -   fc1.weight: mean=0.000006, std=0.010296, min=-0.022044, max=0.021888
+2025-07-06 16:39:50,790 - INFO -   fc1.bias: mean=0.000546, std=0.023334, min=-0.076481, max=0.062322
+2025-07-06 16:39:50,790 - INFO -   fc2.weight: mean=-0.001171, std=0.032240, min=-0.096880, max=0.097229
+2025-07-06 16:39:50,790 - INFO -   fc2.bias: mean=0.007619, std=0.030222, min=-0.051017, max=0.042329
+2025-07-06 16:39:50,790 - INFO - Broadcasting global model to clients
+2025-07-06 16:39:50,791 - INFO - Client 0: Setting new model
+2025-07-06 16:39:50,791 - INFO - Client 0: Model updated. Param change: 0.0182 → 0.0165
+2025-07-06 16:39:50,791 - INFO - Client 1: Setting new model
+2025-07-06 16:39:50,792 - INFO - Client 1: Model updated. Param change: 0.0133 → 0.0165
+2025-07-06 16:39:50,792 - INFO - Client 2: Setting new model
+2025-07-06 16:39:50,792 - INFO - Client 2: Model updated. Param change: 0.0171 → 0.0165
+2025-07-06 16:39:50,792 - INFO - Client 3: Setting new model
+2025-07-06 16:39:50,792 - INFO - Client 3: Model updated. Param change: 0.0167 → 0.0165
+2025-07-06 16:39:50,792 - INFO - Client 4: Setting new model
+2025-07-06 16:39:50,793 - INFO - Client 4: Model updated. Param change: 0.0163 → 0.0165
+2025-07-06 16:39:50,793 - INFO - Client 5: Setting new model
+2025-07-06 16:39:50,793 - INFO - Client 5: Model updated. Param change: 0.0139 → 0.0165
+2025-07-06 16:39:50,793 - INFO - Client 6: Setting new model
+2025-07-06 16:39:50,793 - INFO - Client 6: Model updated. Param change: 0.0169 → 0.0165
+2025-07-06 16:39:50,794 - INFO - Client 7: Setting new model
+2025-07-06 16:39:50,794 - INFO - Client 7: Model updated. Param change: 0.0163 → 0.0165
+2025-07-06 16:39:50,794 - INFO - Client 8: Setting new model
+2025-07-06 16:39:50,794 - INFO - Client 8: Model updated. Param change: 0.0158 → 0.0165
+2025-07-06 16:39:50,794 - INFO - Client 9: Setting new model
+2025-07-06 16:39:50,795 - INFO - Client 9: Model updated. Param change: 0.0170 → 0.0165
+2025-07-06 16:39:50,795 - INFO - Broadcast completed
+2025-07-06 16:39:50,796 - INFO - Client 0 Pre-Training Model Stats (Round 3):
+2025-07-06 16:39:50,796 - INFO -   conv1.weight: mean=0.016497, std=0.125273, min=-0.267557, max=0.259991
+2025-07-06 16:39:50,796 - INFO -   conv1.bias: mean=-0.021021, std=0.099849, min=-0.183716, max=0.166155
+2025-07-06 16:39:50,796 - INFO -   conv2.weight: mean=-0.000799, std=0.021889, min=-0.062079, max=0.058938
+2025-07-06 16:39:50,796 - INFO -   conv2.bias: mean=-0.004495, std=0.030943, min=-0.062890, max=0.053375
+2025-07-06 16:39:50,797 - INFO -   fc1.weight: mean=0.000006, std=0.010296, min=-0.022044, max=0.021888
+2025-07-06 16:39:50,797 - INFO -   fc1.bias: mean=0.000546, std=0.023334, min=-0.076481, max=0.062322
+2025-07-06 16:39:50,797 - INFO -   fc2.weight: mean=-0.001171, std=0.032240, min=-0.096880, max=0.097229
+2025-07-06 16:39:50,797 - INFO -   fc2.bias: mean=0.007619, std=0.030222, min=-0.051017, max=0.042329
+2025-07-06 16:39:50,797 - INFO - Client 0: Starting local training
+2025-07-06 16:39:50,798 - INFO - Client 0: Saved initial model state
+2025-07-06 16:39:50,799 - INFO - Client 0: Epoch 1/1
+2025-07-06 16:40:04,986 - INFO - Client 0: Training complete. Avg loss: 0.2139, Max grad: 6.2910, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:40:04,987 - INFO - Client 0: Max gradient: 0.186420
+2025-07-06 16:40:04,988 - INFO - Client 1: Starting local training
+2025-07-06 16:40:04,988 - INFO - Client 1: Saved initial model state
+2025-07-06 16:40:04,988 - INFO - Client 1: Epoch 1/1
+2025-07-06 16:40:19,812 - INFO - Client 1: Training complete. Avg loss: 0.2275, Max grad: 5.8263, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:40:19,814 - INFO - Client 1: Max gradient: 0.641447
+2025-07-06 16:40:19,814 - INFO - Client 2: Starting local training
+2025-07-06 16:40:19,815 - INFO - Client 2: Saved initial model state
+2025-07-06 16:40:19,815 - INFO - Client 2: Epoch 1/1
+2025-07-06 16:40:31,502 - INFO - Client 2: Training complete. Avg loss: 0.2066, Max grad: 5.4594, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:40:31,503 - INFO - Client 2: Max gradient: 1.164721
+2025-07-06 16:40:31,503 - INFO - Client 3: Starting local training
+2025-07-06 16:40:31,504 - INFO - Client 3: Saved initial model state
+2025-07-06 16:40:31,504 - INFO - Client 3: Epoch 1/1
+2025-07-06 16:40:42,967 - INFO - Client 3: Training complete. Avg loss: 0.2593, Max grad: 4.0384, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:40:42,968 - INFO - Client 3: Max gradient: 1.059898
+2025-07-06 16:40:42,968 - INFO - Client 4: Starting local training
+2025-07-06 16:40:42,969 - INFO - Client 4: Saved initial model state
+2025-07-06 16:40:42,969 - INFO - Client 4: Epoch 1/1
+2025-07-06 16:40:55,104 - INFO - Client 4: Training complete. Avg loss: 0.2790, Max grad: 6.6858, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:40:55,105 - INFO - Client 4: Max gradient: 1.042450
+2025-07-06 16:40:55,105 - INFO - Client 5: Starting local training
+2025-07-06 16:40:55,106 - INFO - Client 5: Saved initial model state
+2025-07-06 16:40:55,106 - INFO - Client 5: Epoch 1/1
+2025-07-06 16:41:06,751 - INFO - Client 5: Training complete. Avg loss: 0.2365, Max grad: 8.3110, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:41:06,752 - INFO - Client 5: Max gradient: 1.558818
+2025-07-06 16:41:06,752 - INFO - Client 6: Starting local training
+2025-07-06 16:41:06,753 - INFO - Client 6: Saved initial model state
+2025-07-06 16:41:06,753 - INFO - Client 6: Epoch 1/1
+2025-07-06 16:41:19,646 - INFO - Client 6: Training complete. Avg loss: 0.2326, Max grad: 7.5135, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:41:19,647 - INFO - Client 6: Max gradient: 0.434665
+2025-07-06 16:41:19,647 - INFO - Client 7: Starting local training
+2025-07-06 16:41:19,648 - INFO - Client 7: Saved initial model state
+2025-07-06 16:41:19,648 - INFO - Client 7: Epoch 1/1
+2025-07-06 16:41:31,392 - INFO - Client 7: Training complete. Avg loss: 0.2460, Max grad: 6.6400, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:41:31,394 - INFO - Client 7: Max gradient: 0.780696
+2025-07-06 16:41:31,394 - INFO - Client 8: Starting local training
+2025-07-06 16:41:31,396 - INFO - Client 8: Saved initial model state
+2025-07-06 16:41:31,396 - INFO - Client 8: Epoch 1/1
+2025-07-06 16:41:42,152 - INFO - Client 8: Training complete. Avg loss: 0.1699, Max grad: 8.4587, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:41:42,153 - INFO - Client 8: Max gradient: 0.161745
+2025-07-06 16:41:42,153 - INFO - Client 9: Starting local training
+2025-07-06 16:41:42,158 - INFO - Client 9: Saved initial model state
+2025-07-06 16:41:42,158 - INFO - Client 9: Epoch 1/1
+2025-07-06 16:41:52,724 - INFO - Client 9: Training complete. Avg loss: 0.2452, Max grad: 5.1656, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:41:52,725 - INFO - Client 9: Max gradient: 1.522230
+2025-07-06 16:41:52,725 - INFO - Average client loss: 0.2317, Max gradients: 1.558818
+2025-07-06 16:41:52,725 - INFO - Starting aggregation
+2025-07-06 16:41:52,725 - INFO - Starting aggregation
+2025-07-06 16:41:52,725 - INFO - Client 0: Getting update
+2025-07-06 16:41:52,725 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,726 - WARNING - Client 0: Large update for conv2.weight: 2.0610
+2025-07-06 16:41:52,728 - WARNING - Client 0: Large update for fc1.weight: 5.5724
+2025-07-06 16:41:52,729 - INFO - Client 0: Update norm: 5.9506
+2025-07-06 16:41:52,729 - INFO - Client 0 update: Received
+2025-07-06 16:41:52,729 - INFO - Client 1: Getting update
+2025-07-06 16:41:52,729 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,729 - WARNING - Client 1: Large update for conv2.weight: 2.0394
+2025-07-06 16:41:52,731 - WARNING - Client 1: Large update for fc1.weight: 5.5518
+2025-07-06 16:41:52,731 - INFO - Client 1: Update norm: 5.9225
+2025-07-06 16:41:52,731 - INFO - Client 1 update: Received
+2025-07-06 16:41:52,731 - INFO - Client 2: Getting update
+2025-07-06 16:41:52,731 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,732 - WARNING - Client 2: Large update for conv2.weight: 2.0890
+2025-07-06 16:41:52,733 - WARNING - Client 2: Large update for fc1.weight: 5.0816
+2025-07-06 16:41:52,733 - INFO - Client 2: Update norm: 5.5038
+2025-07-06 16:41:52,733 - INFO - Client 2 update: Received
+2025-07-06 16:41:52,733 - INFO - Client 3: Getting update
+2025-07-06 16:41:52,733 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,733 - WARNING - Client 3: Large update for conv2.weight: 2.1521
+2025-07-06 16:41:52,735 - WARNING - Client 3: Large update for fc1.weight: 5.2892
+2025-07-06 16:41:52,735 - INFO - Client 3: Update norm: 5.7203
+2025-07-06 16:41:52,735 - INFO - Client 3 update: Received
+2025-07-06 16:41:52,735 - INFO - Client 4: Getting update
+2025-07-06 16:41:52,735 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,735 - WARNING - Client 4: Large update for conv2.weight: 2.2155
+2025-07-06 16:41:52,737 - WARNING - Client 4: Large update for fc1.weight: 4.7573
+2025-07-06 16:41:52,737 - INFO - Client 4: Update norm: 5.2606
+2025-07-06 16:41:52,737 - INFO - Client 4 update: Received
+2025-07-06 16:41:52,737 - INFO - Client 5: Getting update
+2025-07-06 16:41:52,737 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,737 - WARNING - Client 5: Large update for conv2.weight: 2.3549
+2025-07-06 16:41:52,739 - WARNING - Client 5: Large update for fc1.weight: 4.2985
+2025-07-06 16:41:52,739 - INFO - Client 5: Update norm: 4.9144
+2025-07-06 16:41:52,739 - INFO - Client 5 update: Received
+2025-07-06 16:41:52,739 - INFO - Client 6: Getting update
+2025-07-06 16:41:52,739 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,739 - WARNING - Client 6: Large update for conv2.weight: 1.9585
+2025-07-06 16:41:52,740 - WARNING - Client 6: Large update for fc1.weight: 5.9289
+2025-07-06 16:41:52,741 - INFO - Client 6: Update norm: 6.2514
+2025-07-06 16:41:52,741 - INFO - Client 6 update: Received
+2025-07-06 16:41:52,741 - INFO - Client 7: Getting update
+2025-07-06 16:41:52,741 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,741 - WARNING - Client 7: Large update for conv2.weight: 2.1711
+2025-07-06 16:41:52,743 - WARNING - Client 7: Large update for fc1.weight: 4.3050
+2025-07-06 16:41:52,743 - INFO - Client 7: Update norm: 4.8335
+2025-07-06 16:41:52,743 - INFO - Client 7 update: Received
+2025-07-06 16:41:52,743 - INFO - Client 8: Getting update
+2025-07-06 16:41:52,743 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,743 - WARNING - Client 8: Large update for conv2.weight: 1.9595
+2025-07-06 16:41:52,744 - WARNING - Client 8: Large update for fc1.weight: 4.5361
+2025-07-06 16:41:52,744 - INFO - Client 8: Update norm: 4.9504
+2025-07-06 16:41:52,744 - INFO - Client 8 update: Received
+2025-07-06 16:41:52,744 - INFO - Client 9: Getting update
+2025-07-06 16:41:52,744 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,745 - WARNING - Client 9: Large update for conv2.weight: 2.1401
+2025-07-06 16:41:52,746 - WARNING - Client 9: Large update for fc1.weight: 4.5475
+2025-07-06 16:41:52,746 - INFO - Client 9: Update norm: 5.0371
+2025-07-06 16:41:52,746 - INFO - Client 9 update: Received
+2025-07-06 16:41:52,746 - INFO - Computing alpha_t
+2025-07-06 16:41:52,747 - INFO - Update 0 norm: 5.9506
+2025-07-06 16:41:52,747 - INFO - Update 1 norm: 5.9225
+2025-07-06 16:41:52,748 - INFO - Update 2 norm: 5.5038
+2025-07-06 16:41:52,749 - INFO - Update 3 norm: 5.7203
+2025-07-06 16:41:52,750 - INFO - Update 4 norm: 5.2606
+2025-07-06 16:41:52,750 - INFO - Update 5 norm: 4.9144
+2025-07-06 16:41:52,751 - INFO - Update 6 norm: 6.2514
+2025-07-06 16:41:52,752 - INFO - Update 7 norm: 4.8335
+2025-07-06 16:41:52,752 - INFO - Update 8 norm: 4.9504
+2025-07-06 16:41:52,753 - INFO - Update 9 norm: 5.0371
+2025-07-06 16:41:52,753 - INFO - Current max norm: 6.2514
+2025-07-06 16:41:52,753 - INFO - Computed alpha_t: 0.019436 (EMA norm: 5.0720)
+2025-07-06 16:41:52,753 - INFO - Applying precoding and aggregation
+2025-07-06 16:41:52,759 - INFO - Aggregated 10 client updates
+2025-07-06 16:41:52,759 - INFO - Adding channel noise
+2025-07-06 16:41:52,759 - WARNING - Large noise for conv1.weight: 0.6297
+2025-07-06 16:41:52,759 - WARNING - Large noise for conv1.bias: 0.1101
+2025-07-06 16:41:52,760 - WARNING - Large noise for conv2.weight: 5.1367
+2025-07-06 16:41:52,760 - WARNING - Large noise for conv2.bias: 0.2011
+2025-07-06 16:41:52,781 - WARNING - Large noise for fc1.weight: 28.7513
+2025-07-06 16:41:52,781 - WARNING - Large noise for fc1.bias: 0.5517
+2025-07-06 16:41:52,781 - WARNING - Large noise for fc2.weight: 1.6356
+2025-07-06 16:41:52,781 - INFO - Applying server-side scaling
+2025-07-06 16:41:52,781 - WARNING - Large update for conv2.weight: 4.1104, clipping
+2025-07-06 16:41:52,782 - WARNING - Large update for fc1.weight: 20.8766, clipping
+2025-07-06 16:41:52,786 - WARNING - Large update for fc2.weight: 1.1764, clipping
+2025-07-06 16:41:52,795 - INFO - Divergence tracked: 1536.1805
+2025-07-06 16:41:52,795 - INFO - Client 0: Energy - Comp: 1623.47J, Comm: 0.69J, Circuit: 0.06J, Total: 1624.22J
+2025-07-06 16:41:52,795 - INFO - Client 1: Energy - Comp: 625.33J, Comm: 0.68J, Circuit: 0.06J, Total: 626.07J
+2025-07-06 16:41:52,795 - INFO - Client 2: Energy - Comp: 866.17J, Comm: 0.59J, Circuit: 0.06J, Total: 866.82J
+2025-07-06 16:41:52,795 - INFO - Client 3: Energy - Comp: 428.25J, Comm: 0.64J, Circuit: 0.06J, Total: 428.95J
+2025-07-06 16:41:52,795 - INFO - Client 4: Energy - Comp: 882.26J, Comm: 0.54J, Circuit: 0.06J, Total: 882.85J
+2025-07-06 16:41:52,795 - INFO - Client 5: Energy - Comp: 1167.60J, Comm: 0.47J, Circuit: 0.06J, Total: 1168.13J
+2025-07-06 16:41:52,795 - INFO - Client 6: Energy - Comp: 1483.04J, Comm: 0.76J, Circuit: 0.06J, Total: 1483.86J
+2025-07-06 16:41:52,795 - INFO - Client 7: Energy - Comp: 539.17J, Comm: 0.45J, Circuit: 0.06J, Total: 539.69J
+2025-07-06 16:41:52,795 - INFO - Client 8: Energy - Comp: 1297.66J, Comm: 0.48J, Circuit: 0.06J, Total: 1298.20J
+2025-07-06 16:41:52,795 - INFO - Client 9: Energy - Comp: 1982.89J, Comm: 0.49J, Circuit: 0.06J, Total: 1983.44J
+2025-07-06 16:41:52,795 - INFO - Round energy tracked: 10902.24J
+2025-07-06 16:41:52,796 - INFO - Aggregation completed in 0.0704s
+2025-07-06 16:41:52,803 - INFO - Aggregated Model Stats (Round 3):
+2025-07-06 16:41:52,803 - INFO -   conv1.weight: mean=0.014285, std=0.131436, min=-0.327856, max=0.291396
+2025-07-06 16:41:52,803 - INFO -   conv1.bias: mean=-0.023839, std=0.093941, min=-0.212596, max=0.167761
+2025-07-06 16:41:52,805 - INFO -   conv2.weight: mean=-0.001391, std=0.022743, min=-0.066830, max=0.071168
+2025-07-06 16:41:52,805 - INFO -   conv2.bias: mean=-0.007160, std=0.034558, min=-0.068766, max=0.068297
+2025-07-06 16:41:52,807 - INFO -   fc1.weight: mean=0.000019, std=0.010306, min=-0.022980, max=0.023319
+2025-07-06 16:41:52,807 - INFO -   fc1.bias: mean=0.000424, std=0.029494, min=-0.096713, max=0.075276
+2025-07-06 16:41:52,807 - INFO -   fc2.weight: mean=-0.002060, std=0.035009, min=-0.115982, max=0.099404
+2025-07-06 16:41:52,807 - INFO -   fc2.bias: mean=0.001419, std=0.034067, min=-0.067847, max=0.039321
+2025-07-06 16:41:52,807 - INFO - Updating global model
+2025-07-06 16:41:52,809 - INFO - Client 0: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 1: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 2: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 3: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 4: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 5: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 6: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 7: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 8: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 9: Resetting round
+2025-07-06 16:41:52,809 - INFO - Client 0: Getting update
+2025-07-06 16:41:52,809 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,810 - WARNING - Client 0: Large update for conv2.weight: 2.0610
+2025-07-06 16:41:52,812 - WARNING - Client 0: Large update for fc1.weight: 5.5724
+2025-07-06 16:41:52,812 - INFO - Client 0: Update norm: 5.9506
+2025-07-06 16:41:52,812 - INFO - Client 1: Getting update
+2025-07-06 16:41:52,812 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,812 - WARNING - Client 1: Large update for conv2.weight: 2.0394
+2025-07-06 16:41:52,814 - WARNING - Client 1: Large update for fc1.weight: 5.5518
+2025-07-06 16:41:52,814 - INFO - Client 1: Update norm: 5.9225
+2025-07-06 16:41:52,814 - INFO - Client 2: Getting update
+2025-07-06 16:41:52,814 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,814 - WARNING - Client 2: Large update for conv2.weight: 2.0890
+2025-07-06 16:41:52,815 - WARNING - Client 2: Large update for fc1.weight: 5.0816
+2025-07-06 16:41:52,815 - INFO - Client 2: Update norm: 5.5038
+2025-07-06 16:41:52,815 - INFO - Client 3: Getting update
+2025-07-06 16:41:52,816 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,816 - WARNING - Client 3: Large update for conv2.weight: 2.1521
+2025-07-06 16:41:52,817 - WARNING - Client 3: Large update for fc1.weight: 5.2892
+2025-07-06 16:41:52,817 - INFO - Client 3: Update norm: 5.7203
+2025-07-06 16:41:52,817 - INFO - Client 4: Getting update
+2025-07-06 16:41:52,817 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,818 - WARNING - Client 4: Large update for conv2.weight: 2.2155
+2025-07-06 16:41:52,821 - WARNING - Client 4: Large update for fc1.weight: 4.7573
+2025-07-06 16:41:52,821 - INFO - Client 4: Update norm: 5.2606
+2025-07-06 16:41:52,821 - INFO - Client 5: Getting update
+2025-07-06 16:41:52,821 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,821 - WARNING - Client 5: Large update for conv2.weight: 2.3549
+2025-07-06 16:41:52,823 - WARNING - Client 5: Large update for fc1.weight: 4.2985
+2025-07-06 16:41:52,823 - INFO - Client 5: Update norm: 4.9144
+2025-07-06 16:41:52,823 - INFO - Client 6: Getting update
+2025-07-06 16:41:52,823 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,824 - WARNING - Client 6: Large update for conv2.weight: 1.9585
+2025-07-06 16:41:52,825 - WARNING - Client 6: Large update for fc1.weight: 5.9289
+2025-07-06 16:41:52,825 - INFO - Client 6: Update norm: 6.2514
+2025-07-06 16:41:52,825 - INFO - Client 7: Getting update
+2025-07-06 16:41:52,825 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,825 - WARNING - Client 7: Large update for conv2.weight: 2.1711
+2025-07-06 16:41:52,826 - WARNING - Client 7: Large update for fc1.weight: 4.3050
+2025-07-06 16:41:52,826 - INFO - Client 7: Update norm: 4.8335
+2025-07-06 16:41:52,826 - INFO - Client 8: Getting update
+2025-07-06 16:41:52,826 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,827 - WARNING - Client 8: Large update for conv2.weight: 1.9595
+2025-07-06 16:41:52,828 - WARNING - Client 8: Large update for fc1.weight: 4.5361
+2025-07-06 16:41:52,828 - INFO - Client 8: Update norm: 4.9504
+2025-07-06 16:41:52,828 - INFO - Client 9: Getting update
+2025-07-06 16:41:52,828 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:41:52,828 - WARNING - Client 9: Large update for conv2.weight: 2.1401
+2025-07-06 16:41:52,830 - WARNING - Client 9: Large update for fc1.weight: 4.5475
+2025-07-06 16:41:52,830 - INFO - Client 9: Update norm: 5.0371
+2025-07-06 16:41:52,837 - INFO - Valid updates: 10/10
+2025-07-06 16:41:52,838 - INFO - Computing alpha_t
+2025-07-06 16:41:52,838 - INFO - Update 0 norm: 5.9506
+2025-07-06 16:41:52,839 - INFO - Update 1 norm: 5.9225
+2025-07-06 16:41:52,839 - INFO - Update 2 norm: 5.5038
+2025-07-06 16:41:52,840 - INFO - Update 3 norm: 5.7203
+2025-07-06 16:41:52,840 - INFO - Update 4 norm: 5.2606
+2025-07-06 16:41:52,841 - INFO - Update 5 norm: 4.9144
+2025-07-06 16:41:52,842 - INFO - Update 6 norm: 6.2514
+2025-07-06 16:41:52,842 - INFO - Update 7 norm: 4.8335
+2025-07-06 16:41:52,843 - INFO - Update 8 norm: 4.9504
+2025-07-06 16:41:52,843 - INFO - Update 9 norm: 5.0371
+2025-07-06 16:41:52,843 - INFO - Current max norm: 6.2514
+2025-07-06 16:41:52,843 - INFO - Computed alpha_t: 0.018477 (EMA norm: 5.2020)
+2025-07-06 16:41:52,843 - INFO - Model divergence: 1536.1805
+2025-07-06 16:41:52,843 - INFO - Round energy: 32704.66J
+2025-07-06 16:41:52,845 - INFO - Round duration: 122.0205s | Cumulative time: 378.67s
+2025-07-06 16:41:52,845 - INFO - 
+=== Round 4/50 ===
+2025-07-06 16:41:52,845 - INFO - Pre-Broadcast Global Model Stats (Round 4):
+2025-07-06 16:41:52,845 - INFO -   conv1.weight: mean=0.014285, std=0.131436, min=-0.327856, max=0.291396
+2025-07-06 16:41:52,845 - INFO -   conv1.bias: mean=-0.023839, std=0.093941, min=-0.212596, max=0.167761
+2025-07-06 16:41:52,845 - INFO -   conv2.weight: mean=-0.001391, std=0.022743, min=-0.066830, max=0.071168
+2025-07-06 16:41:52,845 - INFO -   conv2.bias: mean=-0.007160, std=0.034558, min=-0.068766, max=0.068297
+2025-07-06 16:41:52,846 - INFO -   fc1.weight: mean=0.000019, std=0.010306, min=-0.022980, max=0.023319
+2025-07-06 16:41:52,846 - INFO -   fc1.bias: mean=0.000424, std=0.029494, min=-0.096713, max=0.075276
+2025-07-06 16:41:52,846 - INFO -   fc2.weight: mean=-0.002060, std=0.035009, min=-0.115982, max=0.099404
+2025-07-06 16:41:52,846 - INFO -   fc2.bias: mean=0.001419, std=0.034067, min=-0.067847, max=0.039321
+2025-07-06 16:41:52,846 - INFO - Broadcasting global model to clients
+2025-07-06 16:41:52,847 - INFO - Client 0: Setting new model
+2025-07-06 16:41:52,849 - INFO - Client 0: Model updated. Param change: 0.0149 → 0.0143
+2025-07-06 16:41:52,849 - INFO - Client 1: Setting new model
+2025-07-06 16:41:52,849 - INFO - Client 1: Model updated. Param change: 0.0146 → 0.0143
+2025-07-06 16:41:52,850 - INFO - Client 2: Setting new model
+2025-07-06 16:41:52,850 - INFO - Client 2: Model updated. Param change: 0.0150 → 0.0143
+2025-07-06 16:41:52,850 - INFO - Client 3: Setting new model
+2025-07-06 16:41:52,850 - INFO - Client 3: Model updated. Param change: 0.0154 → 0.0143
+2025-07-06 16:41:52,850 - INFO - Client 4: Setting new model
+2025-07-06 16:41:52,851 - INFO - Client 4: Model updated. Param change: 0.0123 → 0.0143
+2025-07-06 16:41:52,851 - INFO - Client 5: Setting new model
+2025-07-06 16:41:52,851 - INFO - Client 5: Model updated. Param change: 0.0127 → 0.0143
+2025-07-06 16:41:52,851 - INFO - Client 6: Setting new model
+2025-07-06 16:41:52,851 - INFO - Client 6: Model updated. Param change: 0.0145 → 0.0143
+2025-07-06 16:41:52,851 - INFO - Client 7: Setting new model
+2025-07-06 16:41:52,852 - INFO - Client 7: Model updated. Param change: 0.0136 → 0.0143
+2025-07-06 16:41:52,852 - INFO - Client 8: Setting new model
+2025-07-06 16:41:52,852 - INFO - Client 8: Model updated. Param change: 0.0145 → 0.0143
+2025-07-06 16:41:52,852 - INFO - Client 9: Setting new model
+2025-07-06 16:41:52,852 - INFO - Client 9: Model updated. Param change: 0.0130 → 0.0143
+2025-07-06 16:41:52,852 - INFO - Broadcast completed
+2025-07-06 16:41:52,852 - INFO - Client 0 Pre-Training Model Stats (Round 4):
+2025-07-06 16:41:52,852 - INFO -   conv1.weight: mean=0.014285, std=0.131436, min=-0.327856, max=0.291396
+2025-07-06 16:41:52,853 - INFO -   conv1.bias: mean=-0.023839, std=0.093941, min=-0.212596, max=0.167761
+2025-07-06 16:41:52,853 - INFO -   conv2.weight: mean=-0.001391, std=0.022743, min=-0.066830, max=0.071168
+2025-07-06 16:41:52,853 - INFO -   conv2.bias: mean=-0.007160, std=0.034558, min=-0.068766, max=0.068297
+2025-07-06 16:41:52,854 - INFO -   fc1.weight: mean=0.000019, std=0.010306, min=-0.022980, max=0.023319
+2025-07-06 16:41:52,854 - INFO -   fc1.bias: mean=0.000424, std=0.029494, min=-0.096713, max=0.075276
+2025-07-06 16:41:52,854 - INFO -   fc2.weight: mean=-0.002060, std=0.035009, min=-0.115982, max=0.099404
+2025-07-06 16:41:52,854 - INFO -   fc2.bias: mean=0.001419, std=0.034067, min=-0.067847, max=0.039321
+2025-07-06 16:41:52,854 - INFO - Client 0: Starting local training
+2025-07-06 16:41:52,855 - INFO - Client 0: Saved initial model state
+2025-07-06 16:41:52,855 - INFO - Client 0: Epoch 1/1
+2025-07-06 16:42:03,479 - INFO - Client 0: Training complete. Avg loss: 0.1836, Max grad: 6.4750, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:42:03,480 - INFO - Client 0: Max gradient: 0.587449
+2025-07-06 16:42:03,481 - INFO - Client 1: Starting local training
+2025-07-06 16:42:03,481 - INFO - Client 1: Saved initial model state
+2025-07-06 16:42:03,481 - INFO - Client 1: Epoch 1/1
+2025-07-06 16:42:14,163 - INFO - Client 1: Training complete. Avg loss: 0.2430, Max grad: 13.2230, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:42:14,164 - INFO - Client 1: Max gradient: 0.571883
+2025-07-06 16:42:14,164 - INFO - Client 2: Starting local training
+2025-07-06 16:42:14,165 - INFO - Client 2: Saved initial model state
+2025-07-06 16:42:14,165 - INFO - Client 2: Epoch 1/1
+2025-07-06 16:42:25,285 - INFO - Client 2: Training complete. Avg loss: 0.1803, Max grad: 6.6717, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:42:25,286 - INFO - Client 2: Max gradient: 0.126053
+2025-07-06 16:42:25,286 - INFO - Client 3: Starting local training
+2025-07-06 16:42:25,287 - INFO - Client 3: Saved initial model state
+2025-07-06 16:42:25,287 - INFO - Client 3: Epoch 1/1
+2025-07-06 16:42:37,155 - INFO - Client 3: Training complete. Avg loss: 0.2293, Max grad: 7.3414, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:42:37,155 - INFO - Client 3: Max gradient: 0.213435
+2025-07-06 16:42:37,156 - INFO - Client 4: Starting local training
+2025-07-06 16:42:37,156 - INFO - Client 4: Saved initial model state
+2025-07-06 16:42:37,156 - INFO - Client 4: Epoch 1/1
+2025-07-06 16:42:48,637 - INFO - Client 4: Training complete. Avg loss: 0.2300, Max grad: 7.9767, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:42:48,638 - INFO - Client 4: Max gradient: 0.584021
+2025-07-06 16:42:48,638 - INFO - Client 5: Starting local training
+2025-07-06 16:42:48,638 - INFO - Client 5: Saved initial model state
+2025-07-06 16:42:48,638 - INFO - Client 5: Epoch 1/1
+2025-07-06 16:43:00,177 - INFO - Client 5: Training complete. Avg loss: 0.1967, Max grad: 5.6853, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:43:00,179 - INFO - Client 5: Max gradient: 0.794470
+2025-07-06 16:43:00,179 - INFO - Client 6: Starting local training
+2025-07-06 16:43:00,180 - INFO - Client 6: Saved initial model state
+2025-07-06 16:43:00,180 - INFO - Client 6: Epoch 1/1
+2025-07-06 16:43:11,759 - INFO - Client 6: Training complete. Avg loss: 0.2104, Max grad: 8.4588, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:43:11,760 - INFO - Client 6: Max gradient: 1.451409
+2025-07-06 16:43:11,760 - INFO - Client 7: Starting local training
+2025-07-06 16:43:11,761 - INFO - Client 7: Saved initial model state
+2025-07-06 16:43:11,761 - INFO - Client 7: Epoch 1/1
+2025-07-06 16:43:23,627 - INFO - Client 7: Training complete. Avg loss: 0.2224, Max grad: 10.5631, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:43:23,629 - INFO - Client 7: Max gradient: 0.142143
+2025-07-06 16:43:23,629 - INFO - Client 8: Starting local training
+2025-07-06 16:43:23,630 - INFO - Client 8: Saved initial model state
+2025-07-06 16:43:23,630 - INFO - Client 8: Epoch 1/1
+2025-07-06 16:43:35,903 - INFO - Client 8: Training complete. Avg loss: 0.1516, Max grad: 8.6709, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:43:35,905 - INFO - Client 8: Max gradient: 0.290469
+2025-07-06 16:43:35,905 - INFO - Client 9: Starting local training
+2025-07-06 16:43:35,905 - INFO - Client 9: Saved initial model state
+2025-07-06 16:43:35,906 - INFO - Client 9: Epoch 1/1
+2025-07-06 16:43:47,993 - INFO - Client 9: Training complete. Avg loss: 0.2083, Max grad: 5.1815, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:43:47,994 - INFO - Client 9: Max gradient: 0.335101
+2025-07-06 16:43:47,995 - INFO - Average client loss: 0.2056, Max gradients: 1.451409
+2025-07-06 16:43:47,995 - INFO - Starting aggregation
+2025-07-06 16:43:47,995 - INFO - Starting aggregation
+2025-07-06 16:43:47,995 - INFO - Client 0: Getting update
+2025-07-06 16:43:47,995 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:43:47,995 - WARNING - Client 0: Large update for conv2.weight: 1.7577
+2025-07-06 16:43:47,997 - WARNING - Client 0: Large update for fc1.weight: 6.1742
+2025-07-06 16:43:47,997 - INFO - Client 0: Update norm: 6.4261
+2025-07-06 16:43:47,997 - INFO - Client 0 update: Received
+2025-07-06 16:43:47,997 - INFO - Client 1: Getting update
+2025-07-06 16:43:47,997 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:43:47,997 - WARNING - Client 1: Large update for conv2.weight: 2.1160
+2025-07-06 16:43:48,002 - WARNING - Client 1: Large update for fc1.weight: 5.3868
+2025-07-06 16:43:48,003 - INFO - Client 1: Update norm: 5.7993
+2025-07-06 16:43:48,003 - INFO - Client 1 update: Received
+2025-07-06 16:43:48,003 - INFO - Client 2: Getting update
+2025-07-06 16:43:48,003 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,003 - WARNING - Client 2: Large update for conv2.weight: 1.6876
+2025-07-06 16:43:48,004 - WARNING - Client 2: Large update for fc1.weight: 6.0911
+2025-07-06 16:43:48,004 - INFO - Client 2: Update norm: 6.3254
+2025-07-06 16:43:48,004 - INFO - Client 2 update: Received
+2025-07-06 16:43:48,004 - INFO - Client 3: Getting update
+2025-07-06 16:43:48,004 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,005 - WARNING - Client 3: Large update for conv2.weight: 1.8723
+2025-07-06 16:43:48,006 - WARNING - Client 3: Large update for fc1.weight: 6.0563
+2025-07-06 16:43:48,006 - INFO - Client 3: Update norm: 6.3445
+2025-07-06 16:43:48,006 - INFO - Client 3 update: Received
+2025-07-06 16:43:48,006 - INFO - Client 4: Getting update
+2025-07-06 16:43:48,006 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,007 - WARNING - Client 4: Large update for conv2.weight: 1.9974
+2025-07-06 16:43:48,008 - WARNING - Client 4: Large update for fc1.weight: 5.1627
+2025-07-06 16:43:48,008 - INFO - Client 4: Update norm: 5.5451
+2025-07-06 16:43:48,008 - INFO - Client 4 update: Received
+2025-07-06 16:43:48,008 - INFO - Client 5: Getting update
+2025-07-06 16:43:48,008 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,008 - WARNING - Client 5: Large update for conv2.weight: 1.8709
+2025-07-06 16:43:48,010 - WARNING - Client 5: Large update for fc1.weight: 5.2293
+2025-07-06 16:43:48,010 - INFO - Client 5: Update norm: 5.5602
+2025-07-06 16:43:48,010 - INFO - Client 5 update: Received
+2025-07-06 16:43:48,010 - INFO - Client 6: Getting update
+2025-07-06 16:43:48,010 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,011 - WARNING - Client 6: Large update for conv2.weight: 1.7778
+2025-07-06 16:43:48,013 - WARNING - Client 6: Large update for fc1.weight: 6.3208
+2025-07-06 16:43:48,013 - INFO - Client 6: Update norm: 6.5727
+2025-07-06 16:43:48,013 - INFO - Client 6 update: Received
+2025-07-06 16:43:48,013 - INFO - Client 7: Getting update
+2025-07-06 16:43:48,013 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,013 - WARNING - Client 7: Large update for conv2.weight: 2.0639
+2025-07-06 16:43:48,014 - WARNING - Client 7: Large update for fc1.weight: 4.3886
+2025-07-06 16:43:48,015 - INFO - Client 7: Update norm: 4.8623
+2025-07-06 16:43:48,015 - INFO - Client 7 update: Received
+2025-07-06 16:43:48,015 - INFO - Client 8: Getting update
+2025-07-06 16:43:48,015 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,015 - WARNING - Client 8: Large update for conv2.weight: 1.8116
+2025-07-06 16:43:48,016 - WARNING - Client 8: Large update for fc1.weight: 4.8301
+2025-07-06 16:43:48,017 - INFO - Client 8: Update norm: 5.1690
+2025-07-06 16:43:48,017 - INFO - Client 8 update: Received
+2025-07-06 16:43:48,017 - INFO - Client 9: Getting update
+2025-07-06 16:43:48,017 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,017 - WARNING - Client 9: Large update for conv2.weight: 1.8356
+2025-07-06 16:43:48,018 - WARNING - Client 9: Large update for fc1.weight: 5.0082
+2025-07-06 16:43:48,018 - INFO - Client 9: Update norm: 5.3404
+2025-07-06 16:43:48,018 - INFO - Client 9 update: Received
+2025-07-06 16:43:48,018 - INFO - Computing alpha_t
+2025-07-06 16:43:48,019 - INFO - Update 0 norm: 6.4261
+2025-07-06 16:43:48,020 - INFO - Update 1 norm: 5.7993
+2025-07-06 16:43:48,020 - INFO - Update 2 norm: 6.3254
+2025-07-06 16:43:48,021 - INFO - Update 3 norm: 6.3445
+2025-07-06 16:43:48,021 - INFO - Update 4 norm: 5.5451
+2025-07-06 16:43:48,022 - INFO - Update 5 norm: 5.5602
+2025-07-06 16:43:48,023 - INFO - Update 6 norm: 6.5727
+2025-07-06 16:43:48,023 - INFO - Update 7 norm: 4.8623
+2025-07-06 16:43:48,024 - INFO - Update 8 norm: 5.1690
+2025-07-06 16:43:48,024 - INFO - Update 9 norm: 5.3404
+2025-07-06 16:43:48,024 - INFO - Current max norm: 6.5727
+2025-07-06 16:43:48,024 - INFO - Computed alpha_t: 0.017437 (EMA norm: 5.3549)
+2025-07-06 16:43:48,024 - INFO - Applying precoding and aggregation
+2025-07-06 16:43:48,032 - INFO - Aggregated 10 client updates
+2025-07-06 16:43:48,032 - INFO - Adding channel noise
+2025-07-06 16:43:48,032 - WARNING - Large noise for conv1.weight: 0.6694
+2025-07-06 16:43:48,032 - WARNING - Large noise for conv1.bias: 0.1425
+2025-07-06 16:43:48,033 - WARNING - Large noise for conv2.weight: 5.4216
+2025-07-06 16:43:48,033 - WARNING - Large noise for conv2.bias: 0.1696
+2025-07-06 16:43:48,053 - WARNING - Large noise for fc1.weight: 30.3409
+2025-07-06 16:43:48,053 - WARNING - Large noise for fc1.bias: 0.5741
+2025-07-06 16:43:48,053 - WARNING - Large noise for fc2.weight: 1.7141
+2025-07-06 16:43:48,053 - INFO - Applying server-side scaling
+2025-07-06 16:43:48,054 - WARNING - Large update for conv2.weight: 4.3900, clipping
+2025-07-06 16:43:48,055 - WARNING - Large update for fc1.weight: 23.2638, clipping
+2025-07-06 16:43:48,056 - WARNING - Large update for fc2.weight: 1.2984, clipping
+2025-07-06 16:43:48,069 - INFO - Divergence tracked: 1452.5524
+2025-07-06 16:43:48,069 - INFO - Client 0: Energy - Comp: 1623.47J, Comm: 0.72J, Circuit: 0.06J, Total: 1624.25J
+2025-07-06 16:43:48,069 - INFO - Client 1: Energy - Comp: 625.33J, Comm: 0.59J, Circuit: 0.06J, Total: 625.98J
+2025-07-06 16:43:48,069 - INFO - Client 2: Energy - Comp: 866.17J, Comm: 0.70J, Circuit: 0.06J, Total: 866.93J
+2025-07-06 16:43:48,069 - INFO - Client 3: Energy - Comp: 428.25J, Comm: 0.70J, Circuit: 0.06J, Total: 429.01J
+2025-07-06 16:43:48,069 - INFO - Client 4: Energy - Comp: 882.26J, Comm: 0.54J, Circuit: 0.06J, Total: 882.85J
+2025-07-06 16:43:48,069 - INFO - Client 5: Energy - Comp: 1167.60J, Comm: 0.54J, Circuit: 0.06J, Total: 1168.20J
+2025-07-06 16:43:48,069 - INFO - Client 6: Energy - Comp: 1483.04J, Comm: 0.75J, Circuit: 0.06J, Total: 1483.85J
+2025-07-06 16:43:48,069 - INFO - Client 7: Energy - Comp: 539.17J, Comm: 0.41J, Circuit: 0.06J, Total: 539.65J
+2025-07-06 16:43:48,069 - INFO - Client 8: Energy - Comp: 1297.66J, Comm: 0.47J, Circuit: 0.06J, Total: 1298.19J
+2025-07-06 16:43:48,069 - INFO - Client 9: Energy - Comp: 1982.89J, Comm: 0.50J, Circuit: 0.06J, Total: 1983.45J
+2025-07-06 16:43:48,069 - INFO - Round energy tracked: 10902.36J
+2025-07-06 16:43:48,070 - INFO - Aggregation completed in 0.0753s
+2025-07-06 16:43:48,076 - INFO - Aggregated Model Stats (Round 4):
+2025-07-06 16:43:48,076 - INFO -   conv1.weight: mean=0.010753, std=0.136677, min=-0.341379, max=0.304246
+2025-07-06 16:43:48,076 - INFO -   conv1.bias: mean=-0.032202, std=0.097614, min=-0.266126, max=0.170006
+2025-07-06 16:43:48,077 - INFO -   conv2.weight: mean=-0.001956, std=0.023551, min=-0.077803, max=0.075019
+2025-07-06 16:43:48,077 - INFO -   conv2.bias: mean=-0.007463, std=0.038153, min=-0.093321, max=0.087746
+2025-07-06 16:43:48,078 - INFO -   fc1.weight: mean=0.000038, std=0.010320, min=-0.023831, max=0.024203
+2025-07-06 16:43:48,078 - INFO -   fc1.bias: mean=0.000800, std=0.035901, min=-0.104582, max=0.094249
+2025-07-06 16:43:48,078 - INFO -   fc2.weight: mean=-0.002105, std=0.037355, min=-0.130614, max=0.123820
+2025-07-06 16:43:48,078 - INFO -   fc2.bias: mean=0.001990, std=0.036825, min=-0.050054, max=0.047904
+2025-07-06 16:43:48,078 - INFO - Updating global model
+2025-07-06 16:43:48,078 - INFO - Client 0: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 1: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 2: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 3: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 4: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 5: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 6: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 7: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 8: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 9: Resetting round
+2025-07-06 16:43:48,078 - INFO - Client 0: Getting update
+2025-07-06 16:43:48,078 - INFO - Client 0: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,079 - WARNING - Client 0: Large update for conv2.weight: 1.7577
+2025-07-06 16:43:48,081 - WARNING - Client 0: Large update for fc1.weight: 6.1742
+2025-07-06 16:43:48,081 - INFO - Client 0: Update norm: 6.4261
+2025-07-06 16:43:48,081 - INFO - Client 1: Getting update
+2025-07-06 16:43:48,081 - INFO - Client 1: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,081 - WARNING - Client 1: Large update for conv2.weight: 2.1160
+2025-07-06 16:43:48,082 - WARNING - Client 1: Large update for fc1.weight: 5.3868
+2025-07-06 16:43:48,082 - INFO - Client 1: Update norm: 5.7993
+2025-07-06 16:43:48,082 - INFO - Client 2: Getting update
+2025-07-06 16:43:48,082 - INFO - Client 2: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,083 - WARNING - Client 2: Large update for conv2.weight: 1.6876
+2025-07-06 16:43:48,084 - WARNING - Client 2: Large update for fc1.weight: 6.0911
+2025-07-06 16:43:48,084 - INFO - Client 2: Update norm: 6.3254
+2025-07-06 16:43:48,084 - INFO - Client 3: Getting update
+2025-07-06 16:43:48,084 - INFO - Client 3: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,084 - WARNING - Client 3: Large update for conv2.weight: 1.8723
+2025-07-06 16:43:48,085 - WARNING - Client 3: Large update for fc1.weight: 6.0563
+2025-07-06 16:43:48,086 - INFO - Client 3: Update norm: 6.3445
+2025-07-06 16:43:48,086 - INFO - Client 4: Getting update
+2025-07-06 16:43:48,086 - INFO - Client 4: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,086 - WARNING - Client 4: Large update for conv2.weight: 1.9974
+2025-07-06 16:43:48,087 - WARNING - Client 4: Large update for fc1.weight: 5.1627
+2025-07-06 16:43:48,087 - INFO - Client 4: Update norm: 5.5451
+2025-07-06 16:43:48,087 - INFO - Client 5: Getting update
+2025-07-06 16:43:48,087 - INFO - Client 5: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,087 - WARNING - Client 5: Large update for conv2.weight: 1.8709
+2025-07-06 16:43:48,089 - WARNING - Client 5: Large update for fc1.weight: 5.2293
+2025-07-06 16:43:48,089 - INFO - Client 5: Update norm: 5.5602
+2025-07-06 16:43:48,089 - INFO - Client 6: Getting update
+2025-07-06 16:43:48,089 - INFO - Client 6: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,089 - WARNING - Client 6: Large update for conv2.weight: 1.7778
+2025-07-06 16:43:48,090 - WARNING - Client 6: Large update for fc1.weight: 6.3208
+2025-07-06 16:43:48,090 - INFO - Client 6: Update norm: 6.5727
+2025-07-06 16:43:48,090 - INFO - Client 7: Getting update
+2025-07-06 16:43:48,090 - INFO - Client 7: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,091 - WARNING - Client 7: Large update for conv2.weight: 2.0639
+2025-07-06 16:43:48,092 - WARNING - Client 7: Large update for fc1.weight: 4.3886
+2025-07-06 16:43:48,092 - INFO - Client 7: Update norm: 4.8623
+2025-07-06 16:43:48,092 - INFO - Client 8: Getting update
+2025-07-06 16:43:48,092 - INFO - Client 8: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,092 - WARNING - Client 8: Large update for conv2.weight: 1.8116
+2025-07-06 16:43:48,094 - WARNING - Client 8: Large update for fc1.weight: 4.8301
+2025-07-06 16:43:48,094 - INFO - Client 8: Update norm: 5.1690
+2025-07-06 16:43:48,094 - INFO - Client 9: Getting update
+2025-07-06 16:43:48,094 - INFO - Client 9: State - global_start: True, local_trained: True
+2025-07-06 16:43:48,094 - WARNING - Client 9: Large update for conv2.weight: 1.8356
+2025-07-06 16:43:48,095 - WARNING - Client 9: Large update for fc1.weight: 5.0082
+2025-07-06 16:43:48,096 - INFO - Client 9: Update norm: 5.3404
+2025-07-06 16:43:48,098 - INFO - Valid updates: 10/10
+2025-07-06 16:43:48,098 - INFO - Computing alpha_t
+2025-07-06 16:43:48,098 - INFO - Update 0 norm: 6.4261
+2025-07-06 16:43:48,099 - INFO - Update 1 norm: 5.7993
+2025-07-06 16:43:48,099 - INFO - Update 2 norm: 6.3254
+2025-07-06 16:43:48,100 - INFO - Update 3 norm: 6.3445
+2025-07-06 16:43:48,101 - INFO - Update 4 norm: 5.5451
+2025-07-06 16:43:48,101 - INFO - Update 5 norm: 5.5602
+2025-07-06 16:43:48,102 - INFO - Update 6 norm: 6.5727
+2025-07-06 16:43:48,102 - INFO - Update 7 norm: 4.8623
+2025-07-06 16:43:48,103 - INFO - Update 8 norm: 5.1690
+2025-07-06 16:43:48,103 - INFO - Update 9 norm: 5.3404
+2025-07-06 16:43:48,104 - INFO - Current max norm: 6.5727
+2025-07-06 16:43:48,104 - INFO - Computed alpha_t: 0.016596 (EMA norm: 5.4888)
+2025-07-06 16:43:48,104 - INFO - Model divergence: 1452.5524
+2025-07-06 16:43:48,104 - INFO - Round energy: 43607.02J
+2025-07-06 16:43:48,105 - INFO - Round duration: 115.2338s | Cumulative time: 493.90s
+2025-07-06 16:43:48,105 - INFO - 
+=== Round 5/50 ===
+2025-07-06 16:43:48,105 - INFO - Pre-Broadcast Global Model Stats (Round 5):
+2025-07-06 16:43:48,105 - INFO -   conv1.weight: mean=0.010753, std=0.136677, min=-0.341379, max=0.304246
+2025-07-06 16:43:48,105 - INFO -   conv1.bias: mean=-0.032202, std=0.097614, min=-0.266126, max=0.170006
+2025-07-06 16:43:48,105 - INFO -   conv2.weight: mean=-0.001956, std=0.023551, min=-0.077803, max=0.075019
+2025-07-06 16:43:48,105 - INFO -   conv2.bias: mean=-0.007463, std=0.038153, min=-0.093321, max=0.087746
+2025-07-06 16:43:48,106 - INFO -   fc1.weight: mean=0.000038, std=0.010320, min=-0.023831, max=0.024203
+2025-07-06 16:43:48,106 - INFO -   fc1.bias: mean=0.000800, std=0.035901, min=-0.104582, max=0.094249
+2025-07-06 16:43:48,106 - INFO -   fc2.weight: mean=-0.002105, std=0.037355, min=-0.130614, max=0.123820
+2025-07-06 16:43:48,106 - INFO -   fc2.bias: mean=0.001990, std=0.036825, min=-0.050054, max=0.047904
+2025-07-06 16:43:48,106 - INFO - Broadcasting global model to clients
+2025-07-06 16:43:48,107 - INFO - Client 0: Setting new model
+2025-07-06 16:43:48,107 - INFO - Client 0: Model updated. Param change: 0.0103 → 0.0108
+2025-07-06 16:43:48,108 - INFO - Client 1: Setting new model
+2025-07-06 16:43:48,108 - INFO - Client 1: Model updated. Param change: 0.0071 → 0.0108
+2025-07-06 16:43:48,108 - INFO - Client 2: Setting new model
+2025-07-06 16:43:48,108 - INFO - Client 2: Model updated. Param change: 0.0120 → 0.0108
+2025-07-06 16:43:48,108 - INFO - Client 3: Setting new model
+2025-07-06 16:43:48,109 - INFO - Client 3: Model updated. Param change: 0.0128 → 0.0108
+2025-07-06 16:43:48,109 - INFO - Client 4: Setting new model
+2025-07-06 16:43:48,109 - INFO - Client 4: Model updated. Param change: 0.0098 → 0.0108
+2025-07-06 16:43:48,109 - INFO - Client 5: Setting new model
+2025-07-06 16:43:48,109 - INFO - Client 5: Model updated. Param change: 0.0115 → 0.0108
+2025-07-06 16:43:48,109 - INFO - Client 6: Setting new model
+2025-07-06 16:43:48,110 - INFO - Client 6: Model updated. Param change: 0.0101 → 0.0108
+2025-07-06 16:43:48,110 - INFO - Client 7: Setting new model
+2025-07-06 16:43:48,110 - INFO - Client 7: Model updated. Param change: 0.0088 → 0.0108
+2025-07-06 16:43:48,110 - INFO - Client 8: Setting new model
+2025-07-06 16:43:48,110 - INFO - Client 8: Model updated. Param change: 0.0083 → 0.0108
+2025-07-06 16:43:48,110 - INFO - Client 9: Setting new model
+2025-07-06 16:43:48,111 - INFO - Client 9: Model updated. Param change: 0.0115 → 0.0108
+2025-07-06 16:43:48,111 - INFO - Broadcast completed
+2025-07-06 16:43:48,111 - INFO - Client 0 Pre-Training Model Stats (Round 5):
+2025-07-06 16:43:48,111 - INFO -   conv1.weight: mean=0.010753, std=0.136677, min=-0.341379, max=0.304246
+2025-07-06 16:43:48,111 - INFO -   conv1.bias: mean=-0.032202, std=0.097614, min=-0.266126, max=0.170006
+2025-07-06 16:43:48,111 - INFO -   conv2.weight: mean=-0.001956, std=0.023551, min=-0.077803, max=0.075019
+2025-07-06 16:43:48,111 - INFO -   conv2.bias: mean=-0.007463, std=0.038153, min=-0.093321, max=0.087746
+2025-07-06 16:43:48,112 - INFO -   fc1.weight: mean=0.000038, std=0.010320, min=-0.023831, max=0.024203
+2025-07-06 16:43:48,112 - INFO -   fc1.bias: mean=0.000800, std=0.035901, min=-0.104582, max=0.094249
+2025-07-06 16:43:48,112 - INFO -   fc2.weight: mean=-0.002105, std=0.037355, min=-0.130614, max=0.123820
+2025-07-06 16:43:48,112 - INFO -   fc2.bias: mean=0.001990, std=0.036825, min=-0.050054, max=0.047904
+2025-07-06 16:43:48,112 - INFO - Client 0: Starting local training
+2025-07-06 16:43:48,114 - INFO - Client 0: Saved initial model state
+2025-07-06 16:43:48,114 - INFO - Client 0: Epoch 1/1
+2025-07-06 16:44:00,842 - INFO - Client 0: Training complete. Avg loss: 0.1724, Max grad: 13.4003, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:44:00,844 - INFO - Client 0: Max gradient: 0.216455
+2025-07-06 16:44:00,844 - INFO - Client 1: Starting local training
+2025-07-06 16:44:00,845 - INFO - Client 1: Saved initial model state
+2025-07-06 16:44:00,845 - INFO - Client 1: Epoch 1/1
+2025-07-06 16:44:13,511 - INFO - Client 1: Training complete. Avg loss: 0.1914, Max grad: 5.4939, Samples: 6000, FLOPs: 250596.86M
+2025-07-06 16:44:13,512 - INFO - Client 1: Max gradient: 0.727720
+2025-07-06 16:44:13,512 - INFO - Client 2: Starting local training
+2025-07-06 16:44:13,513 - INFO - Client 2: Saved initial model state
+2025-07-06 16:44:13,513 - INFO - Client 2: Epoch 1/1

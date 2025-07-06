@@ -105,7 +105,8 @@ class COTAFServer:
                 # Apply fading if available
                 if self.fading_coefficients:
                     h = self.fading_coefficients[i]
-                    precoding = h.conjugate() / abs(h) if abs(h) > 0 else 1
+                    # precoding = h.conjugate() / abs(h) if abs(h) > 0 else 1
+                    precoding = 1.0 / h if abs(h) > 1e-3 else 0
                 else:
                     precoding = 1
                     
