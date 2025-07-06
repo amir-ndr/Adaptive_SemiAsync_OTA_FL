@@ -14,10 +14,11 @@ class COTAFServer:
         self.noise_var = noise_var
         self.H_local = H_local
         self.device = device
+        logging.info(f"Server initialized with {len(clients)} clients on {device}")
         
         # Norm tracking
         self.norm_history = []
-        self.ema_max_norm = None  # Initialize EMA tracker
+        self.ema_max_norm = None
         
         # Energy tracking
         self.energy_tracker = {
@@ -31,60 +32,69 @@ class COTAFServer:
         self.fading_coefficients = None
         
     def broadcast_model(self):
-        """Broadcast current global model to all clients"""
-        state_dict = copy.deepcopy(self.global_model.state_dict())
-        for client in self.clients:
-            client.set_model(state_dict)
+        logging.info("Broadcasting global model to clients")
+        try:
+            state_dict = copy.deepcopy(self.global_model.state_dict())
+            for client in self.clients:
+                client.set_model(state_dict)
+            logging.info("Broadcast completed")
+        except Exception as e:
+            logging.error(f"Broadcast failed: {str(e)}")
+            raise
     
     def compute_alpha_t(self, updates):
-        """
-        Compute precoding factor α_t per paper specification:
-        α_t = P / max_n E[||θ_t^n - θ_{t-H}^n||^2]
-        """
+        logging.info("Computing alpha_t")
         # Calculate squared norms for all valid updates
         squared_norms = []
-        for update in updates:
+        for i, update in enumerate(updates):
             if update is None: 
+                logging.warning(f"Update {i} is None")
                 continue
             total_norm = 0.0
             for param in update.values():
                 total_norm += torch.norm(param).item() ** 2
             squared_norms.append(total_norm)
+            logging.info(f"Update {i} norm: {np.sqrt(total_norm):.4f}")
         
         if not squared_norms:
-            return self.P_max / 1e-8  # Avoid division by zero
+            logging.warning("No valid updates for alpha_t calculation")
+            return self.P_max / 1e-8
         
         # Track max norm for EMA calculation
         current_max = max(squared_norms)
         self.norm_history.append(current_max)
+        logging.info(f"Current max norm: {np.sqrt(current_max):.4f}")
         
-        # Paper uses expectation - approximate with EMA
+        # EMA calculation
         decay = 0.9
         if self.ema_max_norm is None:
             self.ema_max_norm = current_max
         else:
             self.ema_max_norm = decay * self.ema_max_norm + (1 - decay) * current_max
             
-        return self.P_max / (self.ema_max_norm + 1e-12)
+        alpha = self.P_max / (self.ema_max_norm + 1e-12)
+        logging.info(f"Computed alpha_t: {alpha:.6f} (EMA norm: {np.sqrt(self.ema_max_norm):.4f})")
+        return alpha
     
     def aggregate(self):
-        """Perform COTAF aggregation with noise mitigation"""
+        logging.info("Starting aggregation")
         aggregation_start = time.time()
         
         # 1. Collect updates from clients
         updates = []
-        for client in self.clients:
-            # Use actual data size for duration estimation
+        for i, client in enumerate(self.clients):
             tx_duration = 0.1 * len(client.data_indices) / 1000
             update = client.get_update(tx_duration)
             updates.append(update)
+            logging.info(f"Client {i} update: {'Received' if update is not None else 'None'}")
         
         # 2. Compute precoding factor α_t
         alpha_t = self.compute_alpha_t(updates)
         
-        # 3. Apply precoding (Eq 9) and aggregate
+        # 3. Apply precoding and aggregate
         aggregated = None
         active_clients = 0
+        logging.info("Applying precoding and aggregation")
         
         for i, update in enumerate(updates):
             if update is None: 
@@ -108,22 +118,36 @@ class COTAFServer:
                     aggregated[key] += precoded_update[key]
             active_clients += 1
         
-        # Handle case where no updates are available
         if aggregated is None:
+            logging.warning("No updates available, returning previous model")
             return copy.deepcopy(self.global_model.state_dict())
         
-        # 4. Add channel noise with proper scaling (Eq 12)
+        logging.info(f"Aggregated {active_clients} client updates")
+        
+        # 4. Add channel noise
+        logging.info("Adding channel noise")
         for key in aggregated:
-            # Calculate noise scaling factor: w_t = w̃_t/(N√α_t)
             noise_scale = math.sqrt(self.noise_var / (active_clients**2 * alpha_t))
             noise = torch.randn_like(aggregated[key]) * noise_scale
             aggregated[key] += noise
+            noise_level = torch.norm(noise).item()
+            if noise_level > 0.1:
+                logging.warning(f"Large noise for {key}: {noise_level:.4f}")
         
-        # 5. Server-side scaling (Eq 12)
+        # 5. Server-side scaling
+        logging.info("Applying server-side scaling")
         scaled_update = {}
         global_model_prev = self.global_model.state_dict()
         for key in aggregated:
-            scaled_update[key] = aggregated[key] / (active_clients * math.sqrt(alpha_t)) + global_model_prev[key]
+            update_val = aggregated[key] / (active_clients * math.sqrt(alpha_t))
+            
+            # Clip large updates
+            update_norm = torch.norm(update_val).item()
+            if update_norm > 1.0:
+                logging.warning(f"Large update for {key}: {update_norm:.4f}, clipping")
+                update_val = update_val / update_norm
+                
+            scaled_update[key] = update_val + global_model_prev[key]
         
         # 6. Track client divergence
         self._track_divergence(scaled_update)
@@ -132,52 +156,66 @@ class COTAFServer:
         self._track_energy(alpha_t)
         
         # Record aggregation time
-        self.energy_tracker['round_times'].append(time.time() - aggregation_start)
+        agg_time = time.time() - aggregation_start
+        self.energy_tracker['round_times'].append(agg_time)
+        logging.info(f"Aggregation completed in {agg_time:.4f}s")
         
         return scaled_update
     
     def _track_divergence(self, global_update):
         """Measure client divergence for heterogeneity analysis"""
-        divergence = 0.0
-        global_state = global_update
-        
-        for client in self.clients:
-            # Only check clients that completed training
-            if not hasattr(client, 'local_model_trained') or client.local_model_trained is None:
-                continue
-                
-            client_state = client.local_model_trained
-            for key in global_state:
-                if key in client_state:
-                    # Calculate difference between global and client model
-                    diff = global_state[key] - client_state[key].to(self.device)
-                    divergence += torch.norm(diff).item() ** 2
+        try:
+            divergence = 0.0
+            global_state = global_update
+            
+            for client in self.clients:
+                if not hasattr(client, 'local_model_trained') or client.local_model_trained is None:
+                    continue
                     
-        self.energy_tracker['divergence_history'].append(divergence)
+                client_state = client.local_model_trained
+                for key in global_state:
+                    if key in client_state:
+                        diff = global_state[key] - client_state[key].to(self.device)
+                        divergence += torch.norm(diff).item() ** 2
+            
+            self.energy_tracker['divergence_history'].append(divergence)
+            logging.info(f"Divergence tracked: {divergence:.4f}")
+        except Exception as e:
+            logging.error(f"Error tracking divergence: {str(e)}")
     
     def _track_energy(self, alpha_t):
         """Track energy consumption across all clients"""
-        round_energy = 0.0
-        per_client_energy = {}
-        
-        for client in self.clients:
-            total_energy = client.get_energy_consumption(alpha_t)
-            self.energy_tracker['cumulative_per_client'][client.client_id] += total_energy
-            round_energy += total_energy
-            per_client_energy[client.client_id] = total_energy
+        try:
+            round_energy = 0.0
+            per_client_energy = {}
             
-        self.energy_tracker['per_round_total'].append(round_energy)
+            for client in self.clients:
+                total_energy = client.get_energy_consumption(alpha_t)
+                self.energy_tracker['cumulative_per_client'][client.client_id] += total_energy
+                round_energy += total_energy
+                per_client_energy[client.client_id] = total_energy
+                
+            self.energy_tracker['per_round_total'].append(round_energy)
+            logging.info(f"Round energy tracked: {round_energy:.2f}J")
+        except Exception as e:
+            logging.error(f"Error tracking energy: {str(e)}")
     
     def update_model(self, state_dict):
         """Update global model and reset client states"""
-        self.global_model.load_state_dict(state_dict)
-        
-        # Reset client states for next round
-        for client in self.clients:
-            client.reset_round()
+        logging.info("Updating global model")
+        try:
+            self.global_model.load_state_dict(state_dict)
+            
+            # Reset client states for next round
+            for client in self.clients:
+                client.reset_round()
+        except Exception as e:
+            logging.error(f"Error updating global model: {str(e)}")
+            raise
     
     def apply_fading(self, coefficients):
-        """Apply fading coefficients for current round (Eq 7 extension)"""
+        """Apply fading coefficients for current round"""
+        logging.info("Applying fading coefficients")
         if len(coefficients) != len(self.clients):
             logging.warning(f"Fading coefficients count mismatch. Expected {len(self.clients)}, got {len(coefficients)}")
         self.fading_coefficients = coefficients

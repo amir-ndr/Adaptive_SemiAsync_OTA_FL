@@ -1,6 +1,6 @@
-import torch
 import numpy as np
 import time
+import torch
 import copy
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Subset
@@ -11,7 +11,35 @@ from dataloader import load_mnist, partition_mnist_noniid
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("cotaf_debug.log"),
+        logging.StreamHandler()
+    ]
+)
+
+def model_param_stats(model, name="Model"):
+    """Log statistics about model parameters"""
+    stats = {}
+    for name, param in model.named_parameters():
+        stats[name] = {
+            'mean': param.data.mean().item(),
+            'std': param.data.std().item(),
+            'min': param.data.min().item(),
+            'max': param.data.max().item()
+        }
+    return stats
+
+def log_model_stats(model, round_idx, prefix=""):
+    """Log detailed model statistics"""
+    logging.info(f"{prefix} Model Stats (Round {round_idx}):")
+    for name, param in model.named_parameters():
+        logging.info(f"  {name}: mean={param.data.mean().item():.6f}, "
+                     f"std={param.data.std().item():.6f}, "
+                     f"min={param.data.min().item():.6f}, "
+                     f"max={param.data.max().item():.6f}")
 
 def calculate_cnnmnist_flops():
     """Calculate FLOPs for one forward+backward pass of CNNMnist"""
@@ -56,6 +84,9 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
     global_model = CNNMnist().to(DEVICE)
     test_loader = DataLoader(test_data, batch_size=256, shuffle=False)
     
+    # Log initial model stats
+    log_model_stats(global_model, 0, "Initial Global")
+    
     # Initialize COTAF server
     server = COTAFServer(
         global_model=global_model,
@@ -74,7 +105,8 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
         'round_times': [],
         'total_energy': [],
         'alpha_values': [],
-        'divergence': []
+        'divergence': [],
+        'param_stats': []  # Track parameter statistics
     }
     
     # Initial evaluation
@@ -85,41 +117,60 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
     
     logging.info("\n=== Starting COTAF Experiment ===")
     cumulative_time = 0
-    learning_rate = 0.05
+    learning_rate = 0.01  # Reduced from 0.05
     
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
         logging.info(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
-        # Learning rate decay
-        if round_idx > 0 and round_idx % 15 == 0:
-            learning_rate *= 0.5
-            for client in clients:
-                for param_group in client.optimizer.param_groups:
-                    param_group['lr'] = learning_rate
-            logging.info(f"Learning rate decayed to: {learning_rate}")
+        # Log global model stats before broadcast
+        log_model_stats(server.global_model, round_idx+1, "Pre-Broadcast Global")
         
         # 1. Broadcast global model
         server.broadcast_model()
         
         # 2. Simulate fading channel (optional)
-        if True:  # Set to False to disable fading
+        use_fading = False  # Disable fading for stability debugging
+        if use_fading:
             fading_coeffs = [complex(np.random.randn(), np.random.randn()) 
                             for _ in range(len(clients))]
             server.apply_fading(fading_coeffs)
+            logging.info("Applied fading coefficients")
         
-        # 3. Local training
+        # 3. Local training with gradient monitoring
         client_losses = []
-        for client in clients:
+        max_gradients = []
+        for client_idx, client in enumerate(clients):
+            # Log client model stats before training
+            if client_idx == 0:  # Only log first client for brevity
+                log_model_stats(client.local_model, round_idx+1, f"Client {client_idx} Pre-Training")
+            
             loss = client.local_train()
             client_losses.append(loss)
+            
+            # Log gradients after training
+            max_grad = 0.0
+            for param in client.local_model.parameters():
+                if param.grad is not None:
+                    grad_norm = param.grad.data.norm(2).item()
+                    if grad_norm > max_grad:
+                        max_grad = grad_norm
+            max_gradients.append(max_grad)
+            logging.info(f"Client {client_idx}: Max gradient: {max_grad:.6f}")
         
         avg_loss = np.mean(client_losses)
         metrics['losses'].append(avg_loss)
-        logging.info(f"Average client loss: {avg_loss:.4f}")
+        logging.info(f"Average client loss: {avg_loss:.4f}, Max gradients: {max(max_gradients):.6f}")
         
         # 4. COTAF aggregation
+        logging.info("Starting aggregation")
         new_state = server.aggregate()
+        
+        # Log aggregated state before updating
+        temp_model = CNNMnist().to(DEVICE)
+        temp_model.load_state_dict(new_state)
+        log_model_stats(temp_model, round_idx+1, "Aggregated")
+        
         server.update_model(new_state)
         
         # 5. Record metrics
@@ -129,10 +180,17 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
         
         # Track alpha value
         try:
-            # Get updates for alpha calculation (without tx_duration)
+            # Get updates for alpha calculation
             updates = [client.get_update(0.1) for client in clients]
-            alpha_t = server.compute_alpha_t(updates)
-            metrics['alpha_values'].append(alpha_t)
+            valid_updates = [u for u in updates if u is not None]
+            logging.info(f"Valid updates: {len(valid_updates)}/{len(updates)}")
+            
+            if valid_updates:
+                alpha_t = server.compute_alpha_t(valid_updates)
+                metrics['alpha_values'].append(alpha_t)
+            else:
+                logging.warning("No valid updates for alpha calculation")
+                metrics['alpha_values'].append(0.1)
         except Exception as e:
             logging.error(f"Error computing alpha_t: {str(e)}")
             metrics['alpha_values'].append(0.1)
@@ -140,12 +198,18 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
         # Track divergence if available
         if 'divergence_history' in server.energy_tracker and server.energy_tracker['divergence_history']:
             metrics['divergence'].append(server.energy_tracker['divergence_history'][-1])
+            logging.info(f"Model divergence: {server.energy_tracker['divergence_history'][-1]:.4f}")
         
         # Track total energy
         if 'per_round_total' in server.energy_tracker and server.energy_tracker['per_round_total']:
             metrics['total_energy'].append(sum(server.energy_tracker['per_round_total']))
+            logging.info(f"Round energy: {sum(server.energy_tracker['per_round_total']):.2f}J")
         else:
             metrics['total_energy'].append(0)
+            logging.warning("No energy data recorded")
+        
+        # Record parameter statistics
+        metrics['param_stats'].append(model_param_stats(server.global_model))
         
         # Evaluate every 5 rounds
         if (round_idx + 1) % 5 == 0 or round_idx == NUM_ROUNDS - 1:
@@ -153,6 +217,9 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
             metrics['accuracies'].append(acc)
             metrics['evaluation_rounds'].append(round_idx+1)
             logging.info(f"Global model accuracy: {acc:.2f}%")
+            
+            # Log final model stats after evaluation
+            log_model_stats(server.global_model, round_idx+1, "Post-Aggregation Global")
         
         logging.info(f"Round duration: {round_time:.4f}s | Cumulative time: {cumulative_time:.2f}s")
     
@@ -243,8 +310,8 @@ def plot_energy_results(results):
 if __name__ == "__main__":
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 100
-    BATCH_SIZE = 32
+    NUM_ROUNDS = 50  # Reduced from 100 for debugging
+    BATCH_SIZE = 64  # Increased from 32
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     logging.info(f"Using device: {DEVICE}")
@@ -260,7 +327,7 @@ if __name__ == "__main__":
     client_data_map = partition_mnist_noniid(
         train_dataset, 
         num_clients=NUM_CLIENTS, 
-        shards_per_client=10  # Matches 100 total shards
+        shards_per_client=10
     )
     
     # Create clients with realistic parameters
@@ -269,10 +336,10 @@ if __name__ == "__main__":
             client_id=cid,
             data_indices=client_data_map[cid],
             model=CNNMnist(),
-            fk=np.random.uniform(1e9, 3e9),  # CPU frequency: 1-3 GHz
-            mu_k=1e-27,       # Energy efficiency coefficient
-            P_max=0.5 + np.random.rand() * 0.5,  # Transmission power: 0.5-1.0 W
-            C=C,              # Precomputed FLOPs per sample
+            fk=np.random.uniform(1e9, 3e9),
+            mu_k=1e-27,
+            P_max=0.5 + np.random.rand() * 0.5,
+            C=C,
             Ak=BATCH_SIZE,
             train_dataset=train_dataset,
             device=DEVICE,
@@ -281,22 +348,26 @@ if __name__ == "__main__":
         for cid in range(NUM_CLIENTS)
     ]
     
-    # Initialize optimizers
+    # Initialize optimizers with lower learning rate
     for client in cotaf_clients:
-        client.optimizer = torch.optim.SGD(
+        client.optimizer = torch.optim.Adam(  # Switch to Adam for stability
             client.local_model.parameters(), 
-            lr=0.01,
-            momentum=0.9,
+            lr=0.001,
             weight_decay=1e-4
         )
+        logging.info(f"Client {client.client_id}: Optimizer: {client.optimizer}")
     
     # Run COTAF experiment
-    results = run_cotaf_experiment(
-        clients=cotaf_clients,
-        NUM_ROUNDS=NUM_ROUNDS,
-        BATCH_SIZE=BATCH_SIZE,
-        DEVICE=DEVICE
-    )
+    try:
+        results = run_cotaf_experiment(
+            clients=cotaf_clients,
+            NUM_ROUNDS=NUM_ROUNDS,
+            BATCH_SIZE=BATCH_SIZE,
+            DEVICE=DEVICE
+        )
+    except Exception as e:
+        logging.critical(f"Experiment failed: {str(e)}", exc_info=True)
+        raise
     
     # Plot results
     plot_cotaf_results(results)
@@ -320,3 +391,8 @@ if __name__ == "__main__":
             logging.info("\nPer-client cumulative energy:")
             for cid, energy in results['energy_metrics']['cumulative_per_client'].items():
                 logging.info(f"Client {cid}: {energy:.2f} J")
+    
+    # Save parameter stats for analysis
+    with open("param_stats.json", "w") as f:
+        import json
+        json.dump(results['param_stats'], f)
