@@ -204,13 +204,10 @@ class COTAFServer:
                 # 2. Compute transmit power (p_k = sqrt(alpha_t * norm_squared))
                 p_k = math.sqrt(alpha_t * client.norm_squared)
                 
-                # 3. Compute gradient norm (||g_k||)
-                grad_norm = client.compute_gradient_norm()
+                # 3. Get energy using paper's formula (NO gradient norm needed)
+                total_energy = client.get_energy_consumption(p_k, h_k)
                 
-                # 4. Get energy using paper's formula
-                total_energy = client.get_energy_consumption(p_k, h_k, grad_norm)
-                
-                # 5. Update tracking
+                # 4. Update tracking
                 self.energy_tracker['cumulative_per_client'][client.client_id] += total_energy
                 round_energy += total_energy
                 per_client_energy[client.client_id] = total_energy

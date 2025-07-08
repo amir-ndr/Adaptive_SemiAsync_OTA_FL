@@ -106,8 +106,8 @@ def main():
         print(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
         
         # 1. Select clients and broadcast current model
-        # selected, power_alloc = server.select_clients()
-        selected, power_alloc = server.random_selection()
+        selected, power_alloc = server.select_clients()
+        # selected, power_alloc = server.random_selection()
         selected_ids = [c.client_id for c in selected]
         selected_counts.append(len(selected))
         

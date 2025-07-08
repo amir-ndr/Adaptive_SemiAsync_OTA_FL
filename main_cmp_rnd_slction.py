@@ -37,10 +37,10 @@ def run_experiment(selection_method, clients, E_max_dict, NUM_ROUNDS, BATCH_SIZE
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=18.12,               # Lyapunov parameter
+        V=15,               # Lyapunov parameter
         sigma_n=0.09,          # Noise std
         tau_cm=0.01,           # Comm latency
-        T_max=1041,             # Time budget (s)
+        T_max=512,             # Time budget (s)
         E_max=E_max_dict,      # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
@@ -183,8 +183,8 @@ def main():
 
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 10
-    BATCH_SIZE = 16
+    NUM_ROUNDS = 300
+    BATCH_SIZE = 32
     LOCAL_EPOCHS = 1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     

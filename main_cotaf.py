@@ -92,7 +92,7 @@ def run_cotaf_experiment(clients, NUM_ROUNDS, BATCH_SIZE, DEVICE):
         global_model=global_model,
         clients=clients,
         P_max=0.5,          # Transmission power constraint
-        noise_var=0.001,    # Channel noise variance
+        noise_var=0.09,    # Channel noise variance
         H_local=1,          # Local steps per round
         device=DEVICE
     )
@@ -310,8 +310,8 @@ def plot_energy_results(results):
 if __name__ == "__main__":
     # Parameters
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 50  # Reduced from 100 for debugging
-    BATCH_SIZE = 64  # Increased from 32
+    NUM_ROUNDS = 300  # Reduced from 100 for debugging
+    BATCH_SIZE = 32  # Increased from 32
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     logging.info(f"Using device: {DEVICE}")

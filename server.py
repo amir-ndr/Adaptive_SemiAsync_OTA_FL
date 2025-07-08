@@ -264,7 +264,7 @@ class Server:
             # Compute actual transmission energy
             E_comm = (power_alloc[cid])**2 * client.gradient_norm**2 / (abs(client.h_t_k)**2 + 1e-8)
             # Use actual computation time
-            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * (client.actual_comp_time * client.fk / (client.C * client.Ak))
+            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak #* (client.actual_comp_time * client.fk / (client.C * client.Ak))
 
             client_energy = E_comp + E_comm
             round_energy += client_energy

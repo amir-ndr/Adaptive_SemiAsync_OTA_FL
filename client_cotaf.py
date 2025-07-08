@@ -12,6 +12,7 @@ class COTAFClient:
         self.client_id = client_id
         self.data_indices = data_indices
         self.device = device
+        self.last_grad_norm = 0.0  # Track gradient norm
         self.local_model = copy.deepcopy(model).to(self.device)
         logging.info(f"Client {client_id}: Model initialized on {device}")
         
@@ -60,14 +61,25 @@ class COTAFClient:
             logging.error(f"Client {self.client_id}: Error setting model: {str(e)}")
             raise
 
+    # def compute_gradient_norm(self):
+    #     """Compute L2 norm of model gradients"""
+    #     total_norm = 0.0
+    #     for param in self.local_model.parameters():
+    #         if param.grad is not None:
+    #             param_norm = param.grad.data.norm(2)
+    #             total_norm += param_norm.item() ** 2
+    #     return math.sqrt(total_norm)
     def compute_gradient_norm(self):
-        """Compute L2 norm of model gradients"""
-        total_norm = 0.0
+        """Compute true L2 norm of full gradient vector"""
+        gradients = []
         for param in self.local_model.parameters():
             if param.grad is not None:
-                param_norm = param.grad.data.norm(2)
-                total_norm += param_norm.item() ** 2
-        return math.sqrt(total_norm)
+                # Flatten and concatenate all gradients
+                gradients.append(param.grad.detach().view(-1))
+        if not gradients:
+            return 0.0
+        full_gradient = torch.cat(gradients)
+        return torch.norm(full_gradient).item()
         
     def local_train(self):
         logging.info(f"Client {self.client_id}: Starting local training")
@@ -80,62 +92,53 @@ class COTAFClient:
         self.global_model_start = initial_state
         logging.info(f"Client {self.client_id}: Saved initial model state")
         
-        # Training loop
+        # Training loop - PAPER-COMPATIBLE: ONE BATCH PER ROUND
         start_time = time.time()
         max_grad = 0.0
         try:
-            for epoch in range(self.local_epochs):
-                logging.info(f"Client {self.client_id}: Epoch {epoch+1}/{self.local_epochs}")
-                for batch_idx, (data, labels) in enumerate(self.train_loader):
-                    # Move data to same device as model
-                    data, labels = data.to(self.device), labels.to(self.device)
-                    batch_size = data.size(0)
-                    
-                    self.optimizer.zero_grad()
-                    outputs = self.local_model(data)
-                    loss = torch.nn.functional.cross_entropy(outputs, labels)
-                    loss.backward()
-                    
-                    # Gradient monitoring
-                    for param in self.local_model.parameters():
-                        if param.grad is not None:
-                            grad_norm = param.grad.data.norm(2).item()
-                            if grad_norm > max_grad:
-                                max_grad = grad_norm
-                    
-                    # Apply gradient clipping
-                    torch.nn.utils.clip_grad_norm_(self.local_model.parameters(), 5.0)
-                    self.optimizer.step()
-                    
-                    total_loss += loss.item() * batch_size
-                    num_samples += batch_size
-                    
-                    # if batch_idx % 10 == 0:
-                    #     logging.info(f"Client {self.client_id}: Batch {batch_idx} loss: {loss.item():.4f}")
+            # Get single batch (matches paper's one SGD step)
+            data, labels = next(iter(self.train_loader))
+            data, labels = data.to(self.device), labels.to(self.device)
+            batch_size = data.size(0)
+            
+            self.optimizer.zero_grad()
+            outputs = self.local_model(data)
+            loss = torch.nn.functional.cross_entropy(outputs, labels)
+            loss.backward()
+            
+            # Store gradient norm BEFORE stepping
+            self.last_grad_norm = self.compute_gradient_norm()
+            
+            # Gradient monitoring
+            for param in self.local_model.parameters():
+                if param.grad is not None:
+                    grad_norm = param.grad.data.norm(2).item()
+                    if grad_norm > max_grad:
+                        max_grad = grad_norm
+            
+            self.optimizer.step()
+            total_loss = loss.item() * batch_size
+            num_samples = batch_size
+                
         except Exception as e:
             logging.error(f"Client {self.client_id}: Training error: {str(e)}")
             return float('inf')
         
-        # Compute FLOPs and energy
-        self.flops_completed = self.C * num_samples * self.local_epochs
+        # Compute FLOPs and energy - PAPER-COMPATIBLE: ONE BATCH
+        self.flops_completed = self.C * num_samples  # No local_epochs multiplier
         duration = time.time() - start_time
         self.comp_energy = self.mu_k * (self.fk ** 2) * self.flops_completed
         
         # Update model states
         self.local_model_trained = copy.deepcopy(self.local_model.state_dict())
-        logging.info(f"Client {self.client_id}: Training complete. Avg loss: {total_loss/num_samples:.4f}, "
-                     f"Max grad: {max_grad:.4f}, Samples: {num_samples}, FLOPs: {self.flops_completed/1e6:.2f}M")
+        logging.info(f"Client {self.client_id}: Training complete. Loss: {loss.item():.4f}, "
+                     f"Grad norm: {self.last_grad_norm:.4f}, Samples: {num_samples}, FLOPs: {self.flops_completed/1e6:.2f}M")
         
-        return total_loss / num_samples if num_samples > 0 else float('inf')
+        return loss.item()
     
     def get_update(self, tx_duration=0.1):
         logging.info(f"Client {self.client_id}: Getting update")
         self.last_tx_duration = tx_duration
-        
-        # Debug state before getting update
-        state_debug = f"global_start: {self.global_model_start is not None}, "
-        state_debug += f"local_trained: {self.local_model_trained is not None}"
-        logging.info(f"Client {self.client_id}: State - {state_debug}")
         
         if self.global_model_start is None or self.local_model_trained is None:
             logging.warning(f"Client {self.client_id}: Missing model states for update")
@@ -144,25 +147,24 @@ class COTAFClient:
         update = {}
         self.norm_squared = 0.0
         try:
+            # Create gradient-mimic update: θ_new - θ_old
+            delta_dict = {}
             for key in self.local_model_trained:
-                # Move tensors to CPU for norm calculation
                 start_cpu = self.global_model_start[key].cpu()
                 trained_cpu = self.local_model_trained[key].cpu()
-                
-                # scaling = min(1.0, math.sqrt(self.P_max / (self.norm_squared + 1e-8)))
-                # delta = scaling * (trained_cpu - start_cpu)  # NEW: Enforce power constraint
-                # update[key] = delta
-                delta = trained_cpu - start_cpu
-                full_norm = torch.norm(torch.cat([t.flatten() for t in delta.values()])).item()
-                scaling = min(1.0, math.sqrt(self.P_max) / (full_norm + 1e-8))
-                for key in delta:
-                    update[key] = scaling * delta[key]
-
-
-                param_norm = torch.norm(delta).item()
+                delta_dict[key] = trained_cpu - start_cpu
+            
+            # Compute full-model norm (for power constraint)
+            full_norm = torch.norm(torch.cat([t.flatten() for t in delta_dict.values()])).item()
+            scaling = min(1.0, math.sqrt(self.P_max) / (full_norm + 1e-8))
+            
+            # Apply uniform scaling
+            for key in delta_dict:
+                update[key] = scaling * delta_dict[key]
+                param_norm = torch.norm(update[key]).item()
                 self.norm_squared += param_norm ** 2
                 
-                # Log large parameter updates
+                # Log large updates
                 if param_norm > 1.0:
                     logging.warning(f"Client {self.client_id}: Large update for {key}: {param_norm:.4f}")
         except Exception as e:
@@ -172,25 +174,20 @@ class COTAFClient:
         logging.info(f"Client {self.client_id}: Update norm: {np.sqrt(self.norm_squared):.4f}")
         return update
     
-    def get_energy_consumption(self, p_k, h_k, grad_norm):
-        """
-        PAPER-COMPATIBLE ENERGY MODEL
-        p_k: Transmit power (scalar)
-        h_k: Complex channel coefficient
-        grad_norm: ||g_k|| (scalar)
-        """
-        # 1. Communication energy (Eq. 5 in paper)
-        h_mag = max(abs(h_k), 1e-8)  # Avoid division by zero
-        comm_energy = (p_k ** 2) * (grad_norm ** 2) / (h_mag ** 2)
+    def get_energy_consumption(self, p_k, h_k):
+        h_mag = max(abs(h_k), 1e-8)
+        true_grad_norm = math.sqrt(self.last_grad_norm)  # Already true norm
         
-        # 2. Computation energy (unchanged)
+        # PAPER FORMULA: E_comm = (p_k^2 * ||g_k||^2) / |h_k|^2
+        comm_energy = (p_k ** 2) * (true_grad_norm ** 2) / (h_mag ** 2)
+        
         total_energy = self.comp_energy + comm_energy
         
         logging.info(f"Client {self.client_id}: Energy | "
                     f"Comp: {self.comp_energy:.2f}J | "
                     f"Comm: {comm_energy:.2f}J | "
                     f"Total: {total_energy:.2f}J | "
-                    f"P_k: {p_k:.4f} |H|: {h_mag:.4f} ||g||: {grad_norm:.4f}")
+                    f"P_k: {p_k:.4f} |H|: {h_mag:.4f} ||g||: {true_grad_norm:.4f}")
         return total_energy
 
     def reset_round(self):
@@ -200,4 +197,4 @@ class COTAFClient:
         self.norm_squared = 0.0
         self.flops_completed = 0
         self.last_tx_duration = 0.0
-        # Note: Not resetting model states intentionally
+        self.last_grad_norm = 0.0
