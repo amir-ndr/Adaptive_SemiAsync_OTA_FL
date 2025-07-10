@@ -26,7 +26,7 @@ class SyncOTAClient:
             device: Computation device ('cpu' or 'cuda')
         """
         self.client_id = client_id
-        self.data_indices = data_indices
+        self.data_indices = list(data_indices)  # Ensure list type
         self.model = copy.deepcopy(model).to(device)
         self.en = en
         self.Lb = Lb
@@ -35,9 +35,8 @@ class SyncOTAClient:
         
         # State variables
         self.last_grad_norm = 1.0  # For EST-P estimation (initial safe value)
+        self.last_gradient = None   # Initialize gradient storage
         self.h_t_k = None  # Current channel gain
-        self.ready = False
-
         
         logger.info(f"Client {client_id} initialized | "
                     f"Data samples: {len(data_indices)} | "
@@ -50,14 +49,12 @@ class SyncOTAClient:
         logger.debug(f"Client {self.client_id}: Model updated")
 
     def set_channel_gain(self):
-        """Set current channel gain using Rayleigh fading"""
-        # Rayleigh fading with scale=1/sqrt(2)
-        magnitude = np.random.rayleigh(scale=1/np.sqrt(2))
-        phase = np.random.uniform(0, 2*np.pi)
-        self.h_t_k = magnitude * np.exp(1j * phase)
+        """Set current channel gain using Rayleigh fading (real-valued)"""
+        # Real-valued channel (magnitude only)
+        self.h_t_k = np.random.rayleigh(scale=1.0)
         logger.debug(f"Client {self.client_id}: Channel set | "
-                     f"|h|: {abs(self.h_t_k):.4f}")
-        return abs(self.h_t_k)
+                     f"|h|: {self.h_t_k:.4f}")
+        return self.h_t_k
 
     def compute_gradient(self) -> torch.Tensor:
         """
@@ -82,26 +79,38 @@ class SyncOTAClient:
         
         # Prepare data
         images = torch.stack([x[0] for x in batch]).to(self.device)
-        labels = torch.tensor([x[1] for x in batch]).to(self.device)
+        if images.dim() == 3:
+            images = images.unsqueeze(1)  # Add channel dimension for MNIST
+            
+        labels = torch.tensor([x[1] for x in batch], dtype=torch.long).to(self.device)
         
+        # Compute gradient
         self.model.zero_grad()
         outputs = self.model(images)
         loss = torch.nn.functional.cross_entropy(outputs, labels)
         loss.backward()
-
         
         # Extract and flatten gradients
         gradients = []
         for param in self.model.parameters():
             if param.grad is not None:
-                gradients.append(param.grad.detach().view(-1))
+                gradients.append(param.grad.detach().clone().view(-1))
         flat_gradient = torch.cat(gradients)
         
         # Store results
         self.last_gradient = flat_gradient
         self.last_grad_norm = torch.norm(flat_gradient).item()
         
+        # Gradient sanity checks
+        if torch.isnan(flat_gradient).any():
+            logger.error(f"Client {self.client_id}: NaN gradient detected!")
+            self.last_gradient = torch.zeros_like(flat_gradient)
+            self.last_grad_norm = 0.0
+        elif self.last_grad_norm < 1e-8:
+            logger.warning(f"Client {self.client_id}: Near-zero gradient!")
+        
         logger.info(f"Client {self.client_id}: Gradient computed | "
+                    f"Samples: {batch_size}/{n_available} | "
                     f"Norm: {self.last_grad_norm:.4f}")
         
         return flat_gradient
@@ -109,7 +118,6 @@ class SyncOTAClient:
     def compute_and_transmit(self, sigma_t: float) -> tuple:
         """
         Compute gradient and prepare transmission signal with energy calculation.
-        Implements equations (3), (5), and (7) from the paper.
         
         Args:
             sigma_t: Power scalar from server
@@ -117,20 +125,20 @@ class SyncOTAClient:
         Returns:
             (transmit_signal, actual_energy, gradient_norm)
         """
-        # Compute gradient (sets self.last_gradient and self.last_grad_norm)
-        gradient = self.compute_gradient()
+        # Compute gradient if not available
+        if self.last_gradient is None:
+            self.compute_gradient()
         
         # Get current channel magnitude
         if self.h_t_k is None:
             self.set_channel_gain()
-        h_mag = abs(self.h_t_k)
         
-        # Prepare transmission signal (Eq 5)
-        transmit_signal = (sigma_t / h_mag) * gradient
+        # Prepare transmission signal (Eq 5) - RAW GRADIENT
+        transmit_signal = (sigma_t / self.h_t_k) * self.last_gradient
         
         # Calculate actual energy consumption (Eq 7)
         E_comp = self.en * self.Lb
-        E_comm = (sigma_t**2 / (h_mag**2)) * (self.last_grad_norm**2)
+        E_comm = torch.norm(transmit_signal).item() ** 2
         actual_energy = E_comp + E_comm
         
         logger.info(f"Client {self.client_id}: Transmission prepared | "
@@ -143,7 +151,6 @@ class SyncOTAClient:
     def estimate_energy(self, sigma_t: float) -> float:
         """
         Estimate energy consumption using EST-P method (Eq 26)
-        Uses last known gradient norm and current channel gain
         
         Args:
             sigma_t: Power scalar from server
@@ -153,11 +160,15 @@ class SyncOTAClient:
         """
         if self.h_t_k is None:
             self.set_channel_gain()
-        h_mag = abs(self.h_t_k)
         
         E_comp = self.en * self.Lb
+        
+        # Protect against extreme gradient values
+        grad_norm = min(self.last_grad_norm, 10.0)  # Clip large gradients
+        grad_norm = max(grad_norm, 0.1)             # Prevent underflow
+        
         # EST-P: Use last gradient norm for estimation
-        E_comm = (sigma_t**2 / (h_mag**2)) * (self.last_grad_norm**2)
+        E_comm = (sigma_t**2 / (self.h_t_k**2)) * (grad_norm**2)
         
         return E_comp + E_comm
 

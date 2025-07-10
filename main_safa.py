@@ -25,7 +25,7 @@ def main():
 
     # ========== Experiment Configuration ==========
     NUM_CLIENTS = 10
-    NUM_ROUNDS = 100
+    NUM_ROUNDS = 300
     BATCH_SIZE = 32
     LOCAL_EPOCHS = 1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import time
 import copy
 import logging
 import math
@@ -55,6 +56,7 @@ class SyncOTAServer:
         self.energy_consumption = {cid: 0.0 for cid in self.qn.keys()}
         self.queue_history = []
         self.accuracy_history = []
+        self.effective_updates = []  # Track update magnitudes
         
         logger.info(f"Server initialized | "
                     f"Model dim: {self.s} | "
@@ -89,15 +91,19 @@ class SyncOTAServer:
         """
         Calculate power scalar σt (Eq 29)
         
-        σt = γ₀σ₀²√s / minₙ(‖g̃ₙₜ‖₂)
+        σt = √(γ₀σ₀²√s / minₙ(‖g̃ₙₜ‖₂))
         """
         min_grad_norm = min(grad_norm_estimates.values())
-        # Avoid division by zero
-        if min_grad_norm < 1e-8:
-            min_grad_norm = 1e-8
-            logger.warning("Very small gradient norm detected, using safe minimum")
+        # Avoid division by zero and large gradients
+        if min_grad_norm < 1e-4:
+            min_grad_norm = 1e-4
+        elif min_grad_norm > 100:
+            min_grad_norm = 100
+            
+        # Calculate with numerical stability
+        numerator = self.gamma0 * (self.sigma0**2) * math.sqrt(self.s)
+        self.sigma_t = math.sqrt(numerator / min_grad_norm)
         
-        self.sigma_t = (self.gamma0 * self.sigma0**2 * math.sqrt(self.s)) / min_grad_norm
         logger.info(f"Power scalar set: σ_t = {self.sigma_t:.4f} | "
                     f"Min grad norm: {min_grad_norm:.4f}")
         return self.sigma_t
@@ -174,13 +180,10 @@ class SyncOTAServer:
     def aggregate_gradients(self, selected_clients):
         """
         Aggregate gradients via OTA transmission (Eq 8, 10)
-        
-        yₜ = σₜ ∑_{n∈Bₜ} g̃ₙₜ + zₜ
-        wₜ = wₜ₋₁ - ηₜ (yₜ / (σₜ|Bₜ|))
         """
         if not selected_clients:
             logger.warning("No clients selected, skipping aggregation")
-            return None
+            return None, {}  # Return None for update and empty energy dict
         
         # Initialize aggregated signal
         aggregated = torch.zeros(self.s, device=self.device)
@@ -189,12 +192,17 @@ class SyncOTAServer:
         # Collect transmissions and actual energies
         for client in selected_clients:
             signal, energy, _ = client.compute_and_transmit(self.sigma_t)
+            
+            # Direct summation (NO staleness discount)
             aggregated += signal
+            
             actual_energies[client.client_id] = energy
             self.energy_consumption[client.client_id] += energy
         
-        # Add Gaussian noise
-        noise = torch.randn(self.s, device=self.device) * self.sigma0
+        # Add scaled Gaussian noise
+        signal_norm = torch.norm(aggregated).item()
+        noise_scale = max(0.01, signal_norm / 10)  # Prevent underflow
+        noise = torch.randn(self.s, device=self.device) * self.sigma0 * noise_scale
         noisy_aggregated = aggregated + noise
         
         # Normalize and create update
@@ -205,10 +213,14 @@ class SyncOTAServer:
             
         update = noisy_aggregated / normalization
         
+        # Track effective update magnitude
+        update_norm = torch.norm(update).item()
+        self.effective_updates.append(update_norm)
+        
         logger.info(f"Aggregation complete | "
                     f"Clients: {len(selected_clients)} | "
                     f"Noise std: {self.sigma0} | "
-                    f"Update norm: {torch.norm(update).item():.4f}")
+                    f"Update norm: {update_norm:.4f}")
         
         return update, actual_energies
 
@@ -218,22 +230,30 @@ class SyncOTAServer:
             logger.warning("No update received, model not updated")
             return
         
-        # Convert model parameters to vector
+        # Get current model parameters as vector
         params_vector = torch.nn.utils.parameters_to_vector(
             self.global_model.parameters()
-        )
+        ).detach()
+        
+        # Gradient clipping to prevent explosions
+        max_norm = 10.0
+        update_norm = torch.norm(update).item()
+        if update_norm > max_norm:
+            update = update * (max_norm / update_norm)
+            logger.warning(f"Gradient clipped: {update_norm:.2f} -> {max_norm:.2f}")
         
         # Apply update
-        params_vector -= self.eta_t * update
+        new_params = params_vector - self.eta_t * update
         
         # Convert back to parameters
         torch.nn.utils.vector_to_parameters(
-            params_vector, 
+            new_params, 
             self.global_model.parameters()
         )
         
         logger.info(f"Model updated | "
-                    f"Learning rate: {self.eta_t:.4f}")
+                    f"Learning rate: {self.eta_t:.4f} | "
+                    f"Update norm: {update_norm:.4f}")
 
     def update_virtual_queues(self, actual_energies):
         """
@@ -276,7 +296,7 @@ class SyncOTAServer:
         # Step 0: Set learning rate
         self.set_learning_rate(round_idx)
         
-        # Step 1: Calculate power scalar σt (requires grad norms)
+        # Step 1: Calculate power scalar σt using ALL clients
         grad_norms = {c.client_id: c.last_grad_norm for c in self.clients}
         self.calculate_power_scalar(grad_norms)
         
@@ -284,7 +304,7 @@ class SyncOTAServer:
         selected = self.select_devices()
         self.selected_history.append([c.client_id for c in selected])
         
-        # Step 3: Broadcast model and σt to selected clients
+        # Step 3: Broadcast model to selected clients
         global_state = self.global_model.state_dict()
         for client in selected:
             client.update_model(global_state)
@@ -303,7 +323,7 @@ class SyncOTAServer:
         round_metrics = {
             'selected': [c.client_id for c in selected],
             'sigma_t': self.sigma_t,
-            'update_norm': torch.norm(update).item() if update else 0,
+            'update_norm': torch.norm(update).item() if update is not None else 0,
             'actual_energies': actual_energies,
             'queues': copy.deepcopy(self.qn)
         }
@@ -315,13 +335,16 @@ class SyncOTAServer:
         self.initialize_clients()
         
         for round_idx in range(self.T):
-            metrics = self.run_round(round_idx)
+            start_time = time.time()
+            round_metrics = self.run_round(round_idx)
+            duration = time.time() - start_time
             
             # Periodic evaluation
             if (round_idx + 1) % eval_every == 0 or round_idx == 0:
                 accuracy = self.evaluate(test_loader)
                 self.accuracy_history.append(accuracy)
-                logger.info(f"Round {round_idx+1} accuracy: {accuracy:.2f}%")
+                logger.info(f"Round {round_idx+1} accuracy: {accuracy:.2f}% | "
+                            f"Duration: {duration:.2f}s")
         
         # Final evaluation
         final_acc = self.evaluate(test_loader)
@@ -332,7 +355,8 @@ class SyncOTAServer:
             'accuracy_history': self.accuracy_history,
             'energy_consumption': self.energy_consumption,
             'final_queues': self.qn,
-            'selection_counts': self.calculate_selection_counts()
+            'selection_counts': self.calculate_selection_counts(),
+            'effective_updates': self.effective_updates
         }
 
     def evaluate(self, test_loader):
@@ -342,9 +366,12 @@ class SyncOTAServer:
         total = 0
         
         with torch.no_grad():
-            for data, labels in test_loader:
-                data, labels = data.to(self.device), labels.to(self.device)
-                outputs = self.global_model(data)
+            for images, labels in test_loader:
+                images, labels = images.to(self.device), labels.to(self.device)
+                # Add channel dimension if needed (for MNIST)
+                if images.dim() == 3:
+                    images = images.unsqueeze(1)
+                outputs = self.global_model(images)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
