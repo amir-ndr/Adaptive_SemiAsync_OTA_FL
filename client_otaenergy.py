@@ -26,7 +26,7 @@ class SyncOTAClient:
             device: Computation device ('cpu' or 'cuda')
         """
         self.client_id = client_id
-        self.data_indices = list(data_indices)  # Ensure list type
+        self.data_indices = list(data_indices)
         self.model = copy.deepcopy(model).to(device)
         self.en = en
         self.Lb = Lb
@@ -34,45 +34,62 @@ class SyncOTAClient:
         self.device = device
         
         # State variables
-        self.last_grad_norm = 1.0  # For EST-P estimation (initial safe value)
-        self.last_gradient = None   # Initialize gradient storage
-        self.h_t_k = None  # Current channel gain
-        
+        self.last_grad_norm = 1.0  # For EST-P estimation
+        self.last_gradient = None
+        self.h_t_k = None
+        self.current_grad_computed = False  # Track if gradient computed in current round
+
         logger.info(f"Client {client_id} initialized | "
-                    f"Data samples: {len(data_indices)} | "
+                    f"Samples: {len(data_indices)} | "
                     f"Energy/sample: {en:.2e} J | "
-                    f"Batch size: {Lb}")
+                    f"Batch: {Lb}")
 
     def update_model(self, model_state_dict: dict):
         """Update local model with global parameters"""
         self.model.load_state_dict(model_state_dict)
+        self.current_grad_computed = False  # Reset on model update
         logger.debug(f"Client {self.client_id}: Model updated")
 
-    def set_channel_gain(self):
-        """Set current channel gain using Rayleigh fading (real-valued)"""
-        # Real-valued channel (magnitude only)
-        self.h_t_k = np.random.rayleigh(scale=1.0)
+    def set_channel_gain(self, h_value: float = None):
+        """
+        Set current channel gain, either from server or generate new
+        
+        Args:
+            h_value: Optional pre-calculated channel gain
+        """
+        if h_value is None:
+            # Rayleigh fading with minimum threshold
+            self.h_t_k = max(np.random.rayleigh(scale=1.0), 0.05)
+        else:
+            self.h_t_k = max(h_value, 0.05)
+            
         logger.debug(f"Client {self.client_id}: Channel set | "
                      f"|h|: {self.h_t_k:.4f}")
         return self.h_t_k
 
     def compute_gradient(self) -> torch.Tensor:
         """
-        Compute local gradient using current model and local data.
-        Stores gradient norm for future EST-P estimation.
+        Compute local gradient with robust handling
+        - Automatic batch size adjustment for small datasets
+        - Gradient clipping and NaN protection
+        - Energy tracking
         
         Returns:
             Flat gradient tensor
         """
+        if self.current_grad_computed:
+            return self.last_gradient
+            
         # Handle insufficient data
         n_available = len(self.data_indices)
         if n_available == 0:
-            logger.warning(f"Client {self.client_id} has no data! Returning zero gradient")
+            logger.warning(f"Client {self.client_id}: No data! Returning zero gradient")
             self.last_gradient = torch.zeros(self._model_dimension(), device=self.device)
             self.last_grad_norm = 0.0
+            self.current_grad_computed = True
             return self.last_gradient
         
-        # Select random mini-batch
+        # Adjust batch size if insufficient data
         batch_size = min(self.Lb, n_available)
         indices = random.sample(self.data_indices, batch_size)
         batch = [self.train_dataset[i] for i in indices]
@@ -80,7 +97,7 @@ class SyncOTAClient:
         # Prepare data
         images = torch.stack([x[0] for x in batch]).to(self.device)
         if images.dim() == 3:
-            images = images.unsqueeze(1)  # Add channel dimension for MNIST
+            images = images.unsqueeze(1)  # Add channel dim for MNIST
             
         labels = torch.tensor([x[1] for x in batch], dtype=torch.long).to(self.device)
         
@@ -90,6 +107,9 @@ class SyncOTAClient:
         loss = torch.nn.functional.cross_entropy(outputs, labels)
         loss.backward()
         
+        # Gradient clipping to prevent explosions
+        # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0)
+        
         # Extract and flatten gradients
         gradients = []
         for param in self.model.parameters():
@@ -97,17 +117,18 @@ class SyncOTAClient:
                 gradients.append(param.grad.detach().clone().view(-1))
         flat_gradient = torch.cat(gradients)
         
+        # Handle NaN values
+        if torch.isnan(flat_gradient).any():
+            logger.error(f"Client {self.client_id}: NaN detected! Using zeros")
+            flat_gradient = torch.zeros_like(flat_gradient)
+        
         # Store results
         self.last_gradient = flat_gradient
-        self.last_grad_norm = torch.norm(flat_gradient).item()
+        grad_norm = torch.norm(flat_gradient).item()
         
-        # Gradient sanity checks
-        if torch.isnan(flat_gradient).any():
-            logger.error(f"Client {self.client_id}: NaN gradient detected!")
-            self.last_gradient = torch.zeros_like(flat_gradient)
-            self.last_grad_norm = 0.0
-        elif self.last_grad_norm < 1e-8:
-            logger.warning(f"Client {self.client_id}: Near-zero gradient!")
+        # Protect against extreme values
+        self.last_grad_norm = max(grad_norm, 0.01)  # Minimum norm threshold
+        self.current_grad_computed = True
         
         logger.info(f"Client {self.client_id}: Gradient computed | "
                     f"Samples: {batch_size}/{n_available} | "
@@ -115,42 +136,70 @@ class SyncOTAClient:
         
         return flat_gradient
 
-    def compute_and_transmit(self, sigma_t: float) -> tuple:
+    def prepare_transmission(self, sigma_t: float) -> tuple:
         """
-        Compute gradient and prepare transmission signal with energy calculation.
+        Prepare transmission signal without computing gradient
+        (Gradient must be pre-computed)
         
         Args:
             sigma_t: Power scalar from server
             
         Returns:
-            (transmit_signal, actual_energy, gradient_norm)
+            (transmit_signal, communication_energy)
         """
-        # Compute gradient if not available
-        if self.last_gradient is None:
-            self.compute_gradient()
+        if not self.current_grad_computed:
+            raise RuntimeError("Gradient not computed before transmission prep")
         
-        # Get current channel magnitude
         if self.h_t_k is None:
+            logger.warning("Channel not set, using default")
             self.set_channel_gain()
         
-        # Prepare transmission signal (Eq 5) - RAW GRADIENT
-        transmit_signal = (sigma_t / self.h_t_k) * self.last_gradient
+        # Calculate transmission signal
+        h_safe = max(self.h_t_k, 0.05)  # Prevent division issues
+        transmit_signal = (sigma_t / h_safe) * self.last_gradient
         
-        # Calculate actual energy consumption (Eq 7)
-        E_comp = self.en * self.Lb
-        E_comm = torch.norm(transmit_signal).item() ** 2
-        actual_energy = E_comp + E_comm
+        # Calculate communication energy only
+        comm_energy = torch.norm(transmit_signal).item() ** 2
         
-        logger.info(f"Client {self.client_id}: Transmission prepared | "
-                    f"Comp energy: {E_comp:.4e} J | "
-                    f"Comm energy: {E_comm:.4e} J | "
-                    f"Total energy: {actual_energy:.4e} J")
+        logger.debug(f"Client {self.client_id}: Transmission prepared | "
+                     f"Comm energy: {comm_energy:.4e} J")
         
-        return transmit_signal, actual_energy, self.last_grad_norm
+        return transmit_signal, comm_energy
+
+    def compute_and_transmit(self, sigma_t: float) -> tuple:
+        """
+        Full compute-transmit sequence
+        
+        Args:
+            sigma_t: Power scalar from server
+            
+        Returns:
+            (transmit_signal, total_energy, gradient_norm)
+        """
+        # Compute gradient if not already done
+        if not self.current_grad_computed:
+            self.compute_gradient()
+        
+        # Get transmission signal
+        transmit_signal, comm_energy = self.prepare_transmission(sigma_t)
+        
+        # Calculate computation energy (based on actual batch size)
+        actual_batch = min(self.Lb, len(self.data_indices))
+        comp_energy = self.en * actual_batch
+        total_energy = comp_energy + comm_energy
+        
+        logger.info(f"Client {self.client_id}: Transmission complete | "
+                    f"Comp: {comp_energy:.4e} J | "
+                    f"Comm: {comm_energy:.4e} J | "
+                    f"Total: {total_energy:.4e} J")
+        
+        return transmit_signal, total_energy, self.last_grad_norm
 
     def estimate_energy(self, sigma_t: float) -> float:
         """
-        Estimate energy consumption using EST-P method (Eq 26)
+        Estimate energy consumption using EST-P method
+        - Uses last known gradient norm
+        - Accounts for variable batch size
         
         Args:
             sigma_t: Power scalar from server
@@ -159,16 +208,18 @@ class SyncOTAClient:
             Estimated energy consumption
         """
         if self.h_t_k is None:
+            logger.warning("Channel not set for estimation")
             self.set_channel_gain()
         
+        # Computation energy (use nominal batch size)
         E_comp = self.en * self.Lb
         
-        # Protect against extreme gradient values
-        grad_norm = min(self.last_grad_norm, 10.0)  # Clip large gradients
-        grad_norm = max(grad_norm, 0.1)             # Prevent underflow
+        # Communication energy estimation
+        h_safe = max(self.h_t_k, 0.05)
+        grad_norm = max(self.last_grad_norm, 0.01)  # Safe minimum
         
-        # EST-P: Use last gradient norm for estimation
-        E_comm = (sigma_t**2 / (self.h_t_k**2)) * (grad_norm**2)
+        # EST-P: (σ_t² / h²) * ||g||²
+        E_comm = (sigma_t**2 / (h_safe**2)) * (grad_norm**2)
         
         return E_comp + E_comm
 

@@ -91,6 +91,8 @@ def run_semi_async_experiment(config):
     }
     
     eval_every = 10  # Evaluate every 10 rounds
+    best_acc = 0
+    early_stop_counter = 0
     
     for round_idx in range(num_rounds):
         round_start = time.time()
@@ -137,11 +139,11 @@ def run_semi_async_experiment(config):
         metrics['avg_staleness'].append(np.mean([c.tau_k for c in clients]))
         metrics['round_durations'].append(D_t)
         
-        # ENERGY CALCULATION
+        # CORRECTED ENERGY CALCULATION
         for client in selected:
             if client.h_t_k is not None and client.gradient_norm > 0:
-                signal = power_alloc[client.client_id] * client.last_gradient / abs(client.h_t_k)
-                E_comm = torch.norm(signal).item() ** 2
+                # Proper communication energy calculation
+                E_comm = power_alloc[client.client_id] ** 2 * client.gradient_norm ** 2 / abs(client.h_t_k) ** 2
             else:
                 E_comm = 0
                 
@@ -152,9 +154,21 @@ def run_semi_async_experiment(config):
         if (round_idx + 1) % eval_every == 0:
             acc = evaluate_model(server.global_model, test_loader, device)
             metrics['accuracies'].append(acc)
+            
+            # Early stopping check
+            if acc > best_acc:
+                best_acc = acc
+                early_stop_counter = 0
+            else:
+                early_stop_counter += 1
+                
             print(f"Round {round_idx+1}/{num_rounds} | "
                   f"Acc: {acc:.2f}% | "
                   f"Duration: {D_t:.4f}s")
+            
+            if early_stop_counter >= 5:
+                print(f"Early stopping at round {round_idx+1}")
+                break
     
     # Final evaluation
     final_acc = evaluate_model(server.global_model, test_loader, device)
@@ -197,22 +211,22 @@ def run_sync_ota_experiment(config):
     # Energy budgets
     E_bars = {cid: np.random.uniform(25, 38) for cid in range(num_clients)}
     
-    # Initialize server with higher learning rate
+    # Initialize server with PROPER learning rate
     global_model = CNNMnist().to(device)
     server = SyncOTAServer(
-        global_model=global_model,
-        clients=clients,
-        E_bars=E_bars,
-        T=num_rounds,
-        V=config['V_sync'],
-        gamma0=config['gamma0'],
-        sigma0=config['sigma_n'],
-        l=config['l'],
-        G=config['G'],
-        Lb=batch_size,
-        eta_base=0.15,  # Increased from 0.1
-        decay_rate=0.95,
-        device=device
+    global_model=global_model,
+    clients=clients,
+    E_bars=E_bars,
+    T=num_rounds,
+    V=config['V_sync'],  # Now 500.0
+    gamma0=config['gamma0'],
+    sigma0=config['sigma_n'],
+    l=config['l'],
+    G=config['G'],
+    Lb=batch_size,
+    eta_base=0.1,
+    decay_rate=0.98,     # Slower decay
+    device=device
     )
     
     # Training metrics
@@ -226,6 +240,8 @@ def run_sync_ota_experiment(config):
     }
     
     eval_every = 10  # Evaluate every 10 rounds
+    best_acc = 0
+    early_stop_counter = 0
     
     # Initialization round
     server.initialize_clients()
@@ -256,10 +272,22 @@ def run_sync_ota_experiment(config):
         if (round_idx + 1) % eval_every == 0:
             acc = evaluate_model(server.global_model, test_loader, device)
             metrics['accuracies'].append(acc)
+            
+            # Early stopping check
+            if acc > best_acc:
+                best_acc = acc
+                early_stop_counter = 0
+            else:
+                early_stop_counter += 1
+                
             print(f"Round {round_idx+1}/{num_rounds} | "
                   f"Acc: {acc:.2f}% | "
                   f"Selected: {len(round_metrics['selected'])} clients | "
                   f"Duration: {metrics['round_durations'][-1]:.4f}s")
+            
+            if early_stop_counter >= 5:
+                print(f"Early stopping at round {round_idx+1}")
+                break
     
     # Final evaluation
     final_acc = evaluate_model(server.global_model, test_loader, device)
@@ -359,20 +387,21 @@ def main():
     logger.info("Starting FL comparison experiment")
 
     # Experiment configuration
+    # Revised configuration:
     config = {
         'num_clients': 10,
         'num_rounds': 300,
-        'batch_size': 32,
+        'batch_size': 64,  # Increased from 32
         'local_epochs': 1,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-        'V_async': 14.0,     # For semi-async algorithm
-        'V_sync': 10.0,      # For sync baseline
-        'sigma_n': 0.04,     # Noise std
-        'tau_cm': 0.01,      # Communication latency
-        'T_max': 500,        # Time budget
-        'gamma0': 15.0,      # Increased target SNR for sync
-        'l': 0.1,            # Smoothness constant
-        'G': 5.0             # Gradient bound
+        'V_async': 14.0,
+        'V_sync': 500.0,   # Drastically increased from 10.0
+        'sigma_n': 0.1,    # Increased from 0.04
+        'tau_cm': 0.01,
+        'T_max': 500,
+        'gamma0': 10.0,    # Reduced from 15.0
+        'l': 0.1,
+        'G': 5.0
     }
     
     print(f"Using device: {config['device']}")
