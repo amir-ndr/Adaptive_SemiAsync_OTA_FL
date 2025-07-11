@@ -4,6 +4,7 @@ import time
 import logging
 import matplotlib.pyplot as plt
 import copy
+import math
 from torch.utils.data import DataLoader
 from dataloader import load_mnist, partition_mnist_noniid
 from model import CNNMnist
@@ -18,8 +19,6 @@ def evaluate_model(model, test_loader, device='cpu'):
     with torch.no_grad():
         for images, labels in test_loader:
             images, labels = images.to(device), labels.to(device)
-            if images.dim() == 3:
-                images = images.unsqueeze(1)
             outputs = model(images)
             _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
@@ -90,10 +89,6 @@ def run_semi_async_experiment(config):
         'cumulative_energy': {cid: 0 for cid in range(num_clients)}
     }
     
-    eval_every = 10  # Evaluate every 10 rounds
-    best_acc = 0
-    early_stop_counter = 0
-    
     for round_idx in range(num_rounds):
         round_start = time.time()
         
@@ -137,43 +132,33 @@ def run_semi_async_experiment(config):
         
         # Record metrics
         metrics['avg_staleness'].append(np.mean([c.tau_k for c in clients]))
-        metrics['round_durations'].append(D_t)
+        round_duration = time.time() - round_start
+        metrics['round_durations'].append(round_duration)
         
-        # CORRECTED ENERGY CALCULATION
+        # Energy tracking
         for client in selected:
-            if client.h_t_k is not None and client.gradient_norm > 0:
-                # Proper communication energy calculation
-                E_comm = power_alloc[client.client_id] ** 2 * client.gradient_norm ** 2 / abs(client.h_t_k) ** 2
-            else:
-                E_comm = 0
-                
-            E_comp = client.mu_k * client.fk ** 2 * client.C * client.Ak
+            # Simplified energy tracking
+            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak
+            E_comm = (power_alloc[client.client_id] * client.gradient_norm / abs(client.h_t_k))**2
             metrics['cumulative_energy'][client.client_id] += E_comp + E_comm
         
         # Periodic evaluation
-        if (round_idx + 1) % eval_every == 0:
+        if (round_idx + 1) % 5 == 0 or round_idx == 0:
             acc = evaluate_model(server.global_model, test_loader, device)
             metrics['accuracies'].append(acc)
-            
-            # Early stopping check
-            if acc > best_acc:
-                best_acc = acc
-                early_stop_counter = 0
-            else:
-                early_stop_counter += 1
-                
+        
+        # Queue tracking
+        metrics['energy_queues'].append(max(server.Q_e.values()))
+        
+        # Log progress
+        if (round_idx + 1) % 10 == 0:
             print(f"Round {round_idx+1}/{num_rounds} | "
-                  f"Acc: {acc:.2f}% | "
-                  f"Duration: {D_t:.4f}s")
-            
-            if early_stop_counter >= 5:
-                print(f"Early stopping at round {round_idx+1}")
-                break
+                  f"Acc: {metrics['accuracies'][-1] if metrics['accuracies'] else 'N/A':.2f}% | "
+                  f"Duration: {round_duration:.4f}s")
     
     # Final evaluation
     final_acc = evaluate_model(server.global_model, test_loader, device)
     metrics['accuracies'].append(final_acc)
-    print(f"Final Accuracy: {final_acc:.2f}%")
     
     return metrics, server.global_model
 
@@ -193,39 +178,40 @@ def run_sync_ota_experiment(config):
     # Initialize clients
     clients = []
     for cid in range(num_clients):
-        indices = list(client_data_map[cid])
+        indices = list(client_data_map[cid])  # Ensure list type
         if len(indices) == 0:
-            indices = [0]
+            indices = [0]  # Prevent empty datasets
             
         client = SyncOTAClient(
-            client_id=cid,
-            data_indices=indices,
-            model=CNNMnist(),
-            en=1e-6,
-            Lb=batch_size,
-            train_dataset=train_dataset,
-            device=device
+        client_id=cid,
+        data_indices=indices,
+        model=CNNMnist(),
+        en=1e-8,  # Energy per sample (J)
+        Lb=batch_size,
+        train_dataset=train_dataset,
+        device=device
         )
         clients.append(client)
     
     # Energy budgets
-    E_bars = {cid: np.random.uniform(25, 38) for cid in range(num_clients)}
+    E_bars = {cid: np.random.uniform(25000, 38000)  # Increased 1000x
+          for cid in range(num_clients)}
     
-    # Initialize server with PROPER learning rate
+    # Initialize server
     global_model = CNNMnist().to(device)
     server = SyncOTAServer(
     global_model=global_model,
     clients=clients,
     E_bars=E_bars,
     T=num_rounds,
-    V=config['V_sync'],  # Now 500.0
+    V=config['V_sync'],
     gamma0=config['gamma0'],
     sigma0=config['sigma_n'],
     l=config['l'],
     G=config['G'],
     Lb=batch_size,
     eta_base=0.1,
-    decay_rate=0.98,     # Slower decay
+    decay_rate=0.95,
     device=device
     )
     
@@ -239,10 +225,6 @@ def run_sync_ota_experiment(config):
         'cumulative_energy': {cid: 0 for cid in range(num_clients)}
     }
     
-    eval_every = 10  # Evaluate every 10 rounds
-    best_acc = 0
-    early_stop_counter = 0
-    
     # Initialization round
     server.initialize_clients()
     
@@ -251,13 +233,15 @@ def run_sync_ota_experiment(config):
         
         # Run round
         round_metrics = server.run_round(round_idx)
+        round_duration = time.time() - round_start
+        metrics['round_durations'].append(round_duration)
         metrics['selected_counts'].append(len(round_metrics['selected']))
         
         # Update selection counts
         for cid in round_metrics['selected']:
             metrics['selection_counts'][cid] += 1
         
-        # Update energy tracking
+        # Update energy tracking - handle empty case
         actual_energies = round_metrics.get('actual_energies', {})
         for cid, energy in actual_energies.items():
             metrics['cumulative_energy'][cid] += energy
@@ -265,34 +249,21 @@ def run_sync_ota_experiment(config):
         # Queue tracking
         metrics['energy_queues'].append(max(server.qn.values()))
         
-        # Record wall-clock duration
-        metrics['round_durations'].append(time.time() - round_start)
-        
         # Periodic evaluation
-        if (round_idx + 1) % eval_every == 0:
+        if (round_idx + 1) % 5 == 0 or round_idx == 0:
             acc = evaluate_model(server.global_model, test_loader, device)
             metrics['accuracies'].append(acc)
-            
-            # Early stopping check
-            if acc > best_acc:
-                best_acc = acc
-                early_stop_counter = 0
-            else:
-                early_stop_counter += 1
-                
+        
+        # Log progress
+        if (round_idx + 1) % 10 == 0:
             print(f"Round {round_idx+1}/{num_rounds} | "
-                  f"Acc: {acc:.2f}% | "
+                  f"Acc: {metrics['accuracies'][-1] if metrics['accuracies'] else 'N/A':.2f}% | "
                   f"Selected: {len(round_metrics['selected'])} clients | "
-                  f"Duration: {metrics['round_durations'][-1]:.4f}s")
-            
-            if early_stop_counter >= 5:
-                print(f"Early stopping at round {round_idx+1}")
-                break
+                  f"Duration: {round_duration:.4f}s")
     
     # Final evaluation
     final_acc = evaluate_model(server.global_model, test_loader, device)
     metrics['accuracies'].append(final_acc)
-    print(f"Final Accuracy: {final_acc:.2f}%")
     
     return metrics, server.global_model
 
@@ -302,8 +273,8 @@ def plot_comparison_results(async_metrics, sync_metrics, config):
     
     # Accuracy comparison
     plt.subplot(231)
-    async_eval_rounds = [10*i for i in range(len(async_metrics['accuracies']))]
-    sync_eval_rounds = [10*i for i in range(len(sync_metrics['accuracies']))]
+    async_eval_rounds = [5*i for i in range(len(async_metrics['accuracies']))]
+    sync_eval_rounds = [5*i for i in range(len(sync_metrics['accuracies']))]
     plt.plot(async_eval_rounds, async_metrics['accuracies'], 'o-', label='Semi-Async OTA')
     plt.plot(sync_eval_rounds, sync_metrics['accuracies'], 's-', label='Sync OTA')
     plt.title("Test Accuracy Comparison", fontsize=14)
@@ -361,8 +332,12 @@ def plot_comparison_results(async_metrics, sync_metrics, config):
     plt.subplot(236)
     async_energy = [async_metrics['cumulative_energy'][i] for i in range(config['num_clients'])]
     sync_energy = [sync_metrics['cumulative_energy'][i] for i in range(config['num_clients'])]
+    budgets = [config['E_bars'][i] if 'E_bars' in config else 
+               25 + (38-25)*i/config['num_clients'] for i in range(config['num_clients'])]
+    
     plt.bar(x - width/2, async_energy, width, label='Semi-Async')
     plt.bar(x + width/2, sync_energy, width, label='Sync')
+    plt.plot(x, budgets, 'k--', label='Energy Budget')
     plt.title("Cumulative Energy per Client", fontsize=14)
     plt.xlabel("Client ID", fontsize=12)
     plt.ylabel("Energy (J)", fontsize=12)
@@ -387,22 +362,24 @@ def main():
     logger.info("Starting FL comparison experiment")
 
     # Experiment configuration
-    # Revised configuration:
     config = {
         'num_clients': 10,
         'num_rounds': 300,
-        'batch_size': 64,  # Increased from 32
+        'batch_size': 32,
         'local_epochs': 1,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-        'V_async': 14.0,
-        'V_sync': 500.0,   # Drastically increased from 10.0
-        'sigma_n': 0.1,    # Increased from 0.04
-        'tau_cm': 0.01,
-        'T_max': 500,
-        'gamma0': 10.0,    # Reduced from 15.0
-        'l': 0.1,
-        'G': 5.0
+        'V_async': 14.0,     # For semi-async algorithm
+        'V_sync': 10.0,      # For sync baseline
+        'sigma_n': 0.04,     # Noise std
+        'tau_cm': 0.01,      # Communication latency
+        'T_max': 500,        # Time budget
+        'gamma0': 10.0,      # Target SNR for sync
+        'l': 0.1,            # Lipschitz smoothness constant
+        'G': 5.0             # Gradient bound
     }
+    
+    # Add energy budgets to config for visualization
+    config['E_bars'] = {cid: np.random.uniform(25, 38) for cid in range(config['num_clients'])}
     
     print(f"Using device: {config['device']}")
     print("=== Running Semi-Async OTA Experiment ===")
@@ -417,7 +394,6 @@ def main():
     print(f"Sync OTA Final Accuracy: {sync_metrics['accuracies'][-1]:.2f}%")
     print(f"Semi-Async Avg Round Duration: {np.mean(async_metrics['round_durations']):.4f}s")
     print(f"Sync OTA Avg Round Duration: {np.mean(sync_metrics['round_durations']):.4f}s")
-    print(f"Semi-Async Avg Staleness: {np.mean(async_metrics['avg_staleness']):.2f} rounds")
     
     # Plot comparison
     plot_comparison_results(async_metrics, sync_metrics, config)
@@ -429,15 +405,6 @@ def main():
              async_metrics=async_metrics, 
              sync_metrics=sync_metrics,
              config=config)
-    
-    # Energy efficiency analysis
-    semi_async_energy = sum(async_metrics['cumulative_energy'].values())
-    sync_ota_energy = sum(sync_metrics['cumulative_energy'].values())
-    print("\nEnergy Efficiency:")
-    print(f"Semi-Async Total Energy: {semi_async_energy:.2f} J")
-    print(f"Sync OTA Total Energy: {sync_ota_energy:.2f} J")
-    print(f"Energy per Accuracy Point (Semi-Async): {semi_async_energy/async_metrics['accuracies'][-1]:.4f} J/%")
-    print(f"Energy per Accuracy Point (Sync): {sync_ota_energy/sync_metrics['accuracies'][-1]:.4f} J/%")
 
 if __name__ == "__main__":
     main()
