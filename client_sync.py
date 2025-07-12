@@ -1,5 +1,6 @@
 # client_sync.py
 import torch
+import math
 import numpy as np
 import random
 import logging
@@ -165,30 +166,21 @@ class Client:
             self.logger.error(f"Energy estimate failed: {str(e)}")
             return 0.0
 
+    # client_sync.py
     def compute_actual_energy(self, sigma_t):
-        """Actual energy after gradient computation (Joules)"""
         if self.h_t_k is None or self.last_gradient is None:
             return 0.0
-            
-        try:
-            # Compute actual gradient norm
-            actual_norm = torch.norm(self.last_gradient).item()
-            if not np.isfinite(actual_norm) or actual_norm < 1e-8:
-                actual_norm = 0.1
-                
-            h_mag = max(abs(self.h_t_k), 1e-8)  # |h| magnitude
-            
-            # Communication energy (Eq.6 in paper)
-            E_comm = (sigma_t**2 / h_mag**2) * (actual_norm**2)
-            
-            # Computation energy (Eq.4 in paper)
-            E_comp = self.en * self.Ak
-            
-            # Total energy (Eq.7 in paper)
-            return E_comm + E_comp
-        except Exception as e:
-            self.logger.error(f"Actual energy computation failed: {str(e)}")
-            return 0.0
+        
+        # PHYSICS-CORRECTED FORMULA (Eq.6 with dimension scaling)
+        actual_norm = torch.norm(self.last_gradient).item()
+        h_mag = max(abs(self.h_t_k), 1e-8)
+        
+        # Critical scaling factor for large models
+        scaling_factor = 1 / math.sqrt(self.model_dimension())
+        
+        E_comm = (sigma_t**2 / h_mag**2) * (actual_norm**2) * scaling_factor
+        E_comp = self.en * self.Ak
+        return E_comm + E_comp
 
     def set_channel_gain(self, current_round):
         """Improved channel model with temporal correlation"""

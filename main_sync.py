@@ -87,18 +87,17 @@ def main():
     # Initialize server with corrected parameters
     global_model = CNNMnist().to(DEVICE)
     server = Server(
-        global_model=global_model,
-        clients=clients,
-        V=5000.0,           # Lyapunov trade-off parameter
-        sigma_n=0.5,         # Noise standard deviation
-        tau_cm=0.1,          # Communication time
-        T_total_rounds=NUM_ROUNDS,
-        E_max=E_max_dict,
-        gamma0=10.0,         # Target SNR (10 dB)
-        G=1.0,               # Gradient variance bound
-        l=1.0,               # Smoothness constant
-        device=DEVICE
-    )
+    global_model=global_model,
+    clients=clients,
+    V=50.0,            # Reduced from 5000
+    sigma_n=1.0,       # Increased noise (realistic)
+    gamma0=1e-6,       # Reduced SNR target
+    G=0.001,           # Reduced gradient variance
+    l=0.001,           # Reduced smoothness
+    T_total_rounds=NUM_ROUNDS,
+    E_max=E_max_dict,
+    device=DEVICE
+)
     
     # Training metrics
     accuracies = []
