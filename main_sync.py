@@ -1,15 +1,13 @@
-import torch
-import numpy as np
-import time
-import copy
 import logging
+import time
+import numpy as np
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from client_sync import SyncClient
 from server_sync import SyncServer
+import torch
 from model import CNNMnist
 from dataloader import load_mnist, partition_mnist_noniid
-import matplotlib.pyplot as plt
-import collections
 
 def evaluate_model(model, test_loader, device='cpu'):
     model.eval()
@@ -24,231 +22,180 @@ def evaluate_model(model, test_loader, device='cpu'):
     return 100 * correct / total
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler("sync_ota_federated_learning.log"),
-            logging.StreamHandler()
-        ]
-    )
-    logger = logging.getLogger(__name__)
-    logger.info("Starting Synchronous OTA-FEEL Simulation")
-
-    # Parameters
-    NUM_CLIENTS = 10
-    NUM_ROUNDS = 300
-    BATCH_SIZE = 32
-    LOCAL_EPOCHS = 1
-    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    print(f"Using device: {DEVICE}")
+    # Configuration
+    logging.basicConfig(level=logging.INFO, 
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    num_clients = 20
+    total_rounds = 300
+    batch_size = 32
     
     # Load data
     train_dataset, test_dataset = load_mnist()
     test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
-    client_data_map = partition_mnist_noniid(train_dataset, NUM_CLIENTS)
+    client_data_map = partition_mnist_noniid(train_dataset, num_clients)
     
-    # Initialize clients
+    # Initialize clients with energy parameters
     clients = []
-    for cid in range(NUM_CLIENTS):
-        # Ensure client has at least 1 sample
-        indices = client_data_map[cid]
-        if len(indices) == 0:
-            indices = [0]  # Add dummy index
-            logger.warning(f"Client {cid} has no data! Adding dummy sample")
+    energy_budgets = {}
+    for cid in range(num_clients):
+        # Energy parameters (paper-inspired values)
+        en = np.random.uniform(1e-6, 5e-6)  # J/sample
+        fk = np.random.uniform(1e9, 3e9)     # CPU frequency
+        P_max = 2.0                           # Max transmit power
         
-        client = SyncClient(
+        clients.append(SyncClient(
             client_id=cid,
-            data_indices=indices,
+            data_indices=client_data_map[cid],
             model=CNNMnist(),
-            fk=np.random.uniform(1e9, 3e9),    # 1-3 GHz CPU
-            mu_k=1e-27,                        # Energy coefficient
-            P_max=3.0,                         # Max transmit power (not used directly in sync)
-            C=1e6,                             # FLOPs per sample
-            Ak=BATCH_SIZE,                     # Batch size
+            fk=fk,
+            en=en,
+            P_max=P_max,
             train_dataset=train_dataset,
-            device=DEVICE,
-            local_epochs=LOCAL_EPOCHS
-        )
-        clients.append(client)
-        print(f"Client {cid}: {len(client_data_map[cid])} samples | "
-              f"CPU: {client.fk/1e9:.2f} GHz")
+            device=device
+        ))
+        energy_budgets[cid] = np.random.uniform(0.5, 2.0)  # Joules
     
-    # Set energy budgets (Joules)
-    E_max_dict = {cid: np.random.uniform(30, 50) for cid in range(NUM_CLIENTS)}
-    print("\nClient Energy Budgets:")
-    for cid, budget in E_max_dict.items():
-        print(f"  Client {cid}: {budget:.2f} J")
-
-    # Initialize server
-    global_model = CNNMnist().to(DEVICE)
+    # Initialize server with algorithm parameters
     server = SyncServer(
-    global_model=global_model,
-    clients=clients,
-    gamma0=5.0,           # Reduced target SNR
-    G=1.0,                # Realistic gradient bound
-    l=0.01,               # Tighter smoothness constant
-    V=100.0,              # Increased Lyapunov parameter
-    sigma_n=0.01,         # Reduced noise std
-    T_total_rounds=NUM_ROUNDS,
-    E_max=E_max_dict,
-    device=DEVICE
-)
-
+        global_model=CNNMnist(),
+        clients=clients,
+        total_rounds=total_rounds,
+        batch_size=batch_size,
+        gamma0=10.0,       # Target SNR
+        sigma_n=0.05,      # Noise std dev
+        G2=1.0,            # Gradient variance bound
+        l_smooth=0.1,      # Smoothness constant
+        energy_budgets=energy_budgets,
+        device=device
+    )
+    
+    # Initial gradient computation for EST-P
+    global_state = server.global_model.state_dict()
+    for client in clients:
+        client.update_model(global_state)
+        client.compute_gradient(batch_size)
+        logging.info(f"Client {client.client_id} initial grad norm: {client.last_gradient_norm:.4f}")
     
     # Training loop
     accuracies = []
-    round_durations = []
-    client_selection_counts = {cid: 0 for cid in range(NUM_CLIENTS)}
-    avg_grad_norms = []
-    energy_consumption = {cid: [] for cid in range(NUM_CLIENTS)}
-    queue_history = []
-
-    for round_idx in range(NUM_ROUNDS):
-        round_start = time.time()
-        logger.info(f"\n=== Round {round_idx+1}/{NUM_ROUNDS} ===")
-        
-        # 1. Select devices using energy-aware scheduling
-        selected, sigma_t = server.schedule_devices(round_idx)
-        selected_ids = [c.client_id for c in selected]
-        for cid in selected_ids:
-            client_selection_counts[cid] += 1
-        
-        logger.info(f"Selected {len(selected)} clients: {selected_ids}")
-        
-        # 2. Broadcast model to selected devices
-        server.broadcast_model(selected)
-        
-        # 3. Compute gradients on selected clients
-        comp_times = []
-        grad_norms = []
-        for client in selected:
-            start_comp = time.time()
-            client.compute_gradient()
-            comp_time = time.time() - start_comp
-            comp_times.append(comp_time)
-            grad_norms.append(client.gradient_norm)
-            logger.info(f"  Client {client.client_id}: "
-                        f"Grad norm={client.gradient_norm:.4f}, "
-                        f"Comp time={comp_time:.4f}s")
-        
-        # 4. Aggregate gradients via OTA
-        aggregated = server.aggregate(selected, sigma_t)
-        
-        # 5. Update global model
-        if round_idx < 100:
-            lr = 0.1
-        elif round_idx < 250:
-            lr = 0.05
-        else:
-            lr = 0.01
-        with torch.no_grad():
-            params = torch.nn.utils.parameters_to_vector(server.global_model.parameters())
-            params -= lr * aggregated
-            torch.nn.utils.vector_to_parameters(params, server.global_model.parameters())
-            logger.info(f"Global model updated with LR={lr:.4f}")
-        
-        # 6. Collect actual energy consumption and update queues
-        actual_energy = {}
-        for client in selected:
-            energy = client.report_energy(sigma_t)
-            actual_energy[client.client_id] = energy
-            energy_consumption[client.client_id].append(energy)
-            logger.info(f"  Client {client.client_id}: "
-                        f"Energy used={energy:.6f} J")
-        server.update_queues(selected, actual_energy)
-        queue_history.append(copy.deepcopy(server.Q_e))
-        
-        # 7. Track metrics
-        round_time = time.time() - round_start
-        round_durations.append(round_time)
-        avg_grad_norms.append(np.mean(grad_norms))
-        
-        # Evaluate every 5 rounds
-        if (round_idx + 1) % 5 == 0 or round_idx == 0:
-            acc = evaluate_model(server.global_model, test_loader, DEVICE)
-            accuracies.append(acc)
-            logger.info(f"Global model accuracy: {acc:.2f}%")
-        
-        logger.info(f"Round duration: {round_time:.2f}s | "
-                    f"Avg grad norm: {np.mean(grad_norms):.4f}")
-
-    # Final evaluation
-    final_acc = evaluate_model(server.global_model, test_loader, DEVICE)
-    accuracies.append(final_acc)
-    logger.info(f"\n=== Training Complete ===")
-    logger.info(f"Final accuracy: {final_acc:.2f}%")
+    round_times = []
+    selection_counts = np.zeros(num_clients)
+    energy_ratios = []
+    snr_history = []
     
-    # Print client selection and energy statistics
-    logger.info("\nClient Selection and Energy Statistics:")
-    for cid in range(NUM_CLIENTS):
-        total_energy = sum(energy_consumption[cid])
-        budget = E_max_dict[cid]
-        logger.info(f"Client {cid}: Selected {client_selection_counts[cid]} times | "
-                    f"Energy: {total_energy:.2f}/{budget:.2f} J | "
-                    f"Remaining: {budget - total_energy:.2f} J")
-
-    # Plot results
+    for round_idx in range(total_rounds):
+        start_time = time.time()
+        logging.info(f"\n=== Round {round_idx+1}/{total_rounds} ===")
+        
+        # 1. Device selection
+        V = 10.0 * (0.9 ** (round_idx // 30))  # Lyapunov parameter
+        selected, sigma_t = server.select_clients(round_idx, V)
+        
+        # 2. Model broadcast
+        global_state = server.global_model.state_dict()
+        for client in selected:
+            client.update_model(global_state)
+            selection_counts[client.client_id] += 1
+        
+        # 3. Gradient computation and aggregation
+        aggregated_update, actual_norms = server.aggregate_gradients(selected, sigma_t)
+        snr_history.append(server.actual_snr_history[-1])
+        
+        # 4. Global model update
+        server.update_model(aggregated_update, round_idx)
+        
+        # 5. Queue update
+        server.update_queues(selected, actual_norms, sigma_t, round_idx)
+        
+        # 6. Track energy ratios
+        current_ratios = []
+        for cid in range(num_clients):
+            consumed = server.energy_consumed.get(cid, 0)
+            budget = energy_budgets[cid]
+            current_ratios.append(consumed / budget)
+        energy_ratios.append(current_ratios)
+        
+        # 7. Evaluation
+        round_time = time.time() - start_time
+        round_times.append(round_time)
+        
+        if (round_idx + 1) % 10 == 0:
+            acc = evaluate_model(server.global_model, test_loader, device)
+            accuracies.append(acc)
+            logging.info(f"Round {round_idx+1} accuracy: {acc:.2f}%")
+            logging.info(f"SNR: {server.actual_snr_history[-1]:.2f} dB")
+    
+    # Final evaluation and visualization
+    final_acc = evaluate_model(server.global_model, test_loader, device)
+    logging.info(f"\n=== Training Complete ===")
+    logging.info(f"Final accuracy: {final_acc:.2f}%")
+    
+    # Visualization
     plt.figure(figsize=(15, 12))
     
     # Accuracy plot
-    plt.subplot(321)
-    eval_rounds = [5*i for i in range(len(accuracies))]
-    plt.plot(eval_rounds, accuracies, 'o-')
+    plt.subplot(231)
+    plt.plot(np.arange(10, total_rounds+1, 10), accuracies, 'o-')
     plt.title("Test Accuracy")
     plt.xlabel("Communication Rounds")
     plt.ylabel("Accuracy (%)")
     plt.grid(True)
-
+    
     # Client selection distribution
-    plt.subplot(322)
-    plt.bar(range(NUM_CLIENTS), [client_selection_counts[cid] for cid in range(NUM_CLIENTS)])
+    plt.subplot(232)
+    plt.bar(range(num_clients), selection_counts)
     plt.title("Client Selection Distribution")
     plt.xlabel("Client ID")
     plt.ylabel("Times Selected")
-    plt.xticks(range(NUM_CLIENTS))
     plt.grid(True)
     
-    # Energy consumption per client
-    plt.subplot(323)
-    for cid in range(NUM_CLIENTS):
-        if energy_consumption[cid]:
-            plt.plot(energy_consumption[cid], label=f'Client {cid}')
-    plt.title("Per-Round Energy Consumption")
-    plt.xlabel("Rounds")
-    plt.ylabel("Energy (J)")
-    plt.legend(loc='upper right', fontsize=8)
+    # Energy consumption ratio
+    plt.subplot(233)
+    energy_ratio = [server.energy_consumed[cid] / energy_budgets[cid] 
+                   for cid in range(num_clients)]
+    plt.bar(range(num_clients), energy_ratio)
+    plt.axhline(1.0, color='r', linestyle='--')
+    plt.title("Energy Consumption Ratio")
+    plt.xlabel("Client ID")
+    plt.ylabel("Energy Used / Budget")
     plt.grid(True)
     
-    # Virtual queues
-    plt.subplot(324)
-    for cid in range(NUM_CLIENTS):
-        queue_vals = [q[cid] for q in queue_history]
-        plt.plot(queue_vals, label=f'Client {cid}')
-    plt.title("Virtual Energy Queues")
+    # Virtual queue dynamics
+    plt.subplot(234)
+    queue_data = np.array([list(q.values()) for q in server.queue_history])
+    plt.plot(queue_data.mean(axis=1), label='Mean')
+    plt.plot(queue_data.max(axis=1), label='Max')
+    plt.title("Virtual Queue Dynamics")
     plt.xlabel("Rounds")
     plt.ylabel("Queue Value")
+    plt.legend()
     plt.grid(True)
     
-    # Average gradient norms
-    plt.subplot(325)
-    plt.plot(avg_grad_norms)
-    plt.title("Average Gradient Norms")
+    # SNR monitoring
+    plt.subplot(235)
+    plt.plot(snr_history)
+    plt.axhline(server.gamma0, color='r', linestyle='--')
+    plt.title("Actual SNR vs Target")
     plt.xlabel("Rounds")
-    plt.ylabel("L2 Norm")
+    plt.ylabel("SNR (dB)")
+    plt.yscale('log')
     plt.grid(True)
     
-    # Round durations
-    plt.subplot(326)
-    plt.plot(round_durations)
-    plt.title("Round Duration")
+    # Energy ratio evolution
+    plt.subplot(236)
+    energy_ratio_data = np.array(energy_ratios)
+    plt.plot(energy_ratio_data.mean(axis=1), label='Mean')
+    plt.plot(energy_ratio_data.max(axis=1), label='Max')
+    plt.axhline(1.0, color='r', linestyle='--')
+    plt.title("Energy Ratio Evolution")
     plt.xlabel("Rounds")
-    plt.ylabel("Time (s)")
+    plt.ylabel("Energy Used / Budget")
+    plt.legend()
     plt.grid(True)
-
-    plt.tight_layout(pad=3.0)
-    plt.savefig("sync_ota_federated_learning_results.png", dpi=300)
+    
+    plt.tight_layout()
+    plt.savefig("sync_ota_results.png")
     plt.show()
 
 if __name__ == "__main__":
