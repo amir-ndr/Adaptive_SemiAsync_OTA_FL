@@ -26,7 +26,7 @@ def main():
     logging.basicConfig(level=logging.INFO, 
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    num_clients = 20
+    num_clients = 10
     total_rounds = 300
     batch_size = 32
     
@@ -89,7 +89,7 @@ def main():
         logging.info(f"\n=== Round {round_idx+1}/{total_rounds} ===")
         
         # 1. Device selection
-        V = 10.0 * (0.9 ** (round_idx // 30))  # Lyapunov parameter
+        V = 18.0 #* (0.9 ** (round_idx // 30))  # Lyapunov parameter
         selected, sigma_t = server.select_clients(round_idx, V)
         
         # 2. Model broadcast
