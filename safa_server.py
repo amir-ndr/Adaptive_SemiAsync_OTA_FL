@@ -52,11 +52,11 @@ class SAFAServer:
         self.round_times = []
         self.client_stats = defaultdict(dict)
         
-        logger.info(f"SAFA Server initialized | "
-                   f"Clients: {len(clients)} | "
-                   f"τ: {lag_tolerance} | "
-                   f"Select: {select_frac:.0%} | "
-                   f"LR: {learning_rate}")
+        # logger.info(f"SAFA Server initialized | "
+        #            f"Clients: {len(clients)} | "
+        #            f"τ: {lag_tolerance} | "
+        #            f"Select: {select_frac:.0%} | "
+        #            f"LR: {learning_rate}")
 
     def classify_clients(self) -> Tuple[list, list, list]:
         """
@@ -78,10 +78,10 @@ class SAFAServer:
             else:
                 deprecated.append(client)
                 
-        logger.info(f"Client classification (v{self.global_version}) | "
-                   f"Up-to-date: {len(up_to_date)} | "
-                   f"Tolerable: {len(tolerable)} | "
-                   f"Deprecated: {len(deprecated)}")
+        # logger.info(f"Client classification (v{self.global_version}) | "
+        #            f"Up-to-date: {len(up_to_date)} | "
+        #            f"Tolerable: {len(tolerable)} | "
+        #            f"Deprecated: {len(deprecated)}")
         
         return up_to_date, tolerable, deprecated
 
@@ -133,6 +133,14 @@ class SAFAServer:
         else:
             undrafted.extend([cid for _, cid, _ in secondary_updates])
         
+        for client_id in selected:
+            client = self.clients[client_id]
+            # Basic water-filling power allocation
+            client.tx_power = min(
+                client.P_max, 
+                0.1 / (abs(client.h_t_k) + 1e-8)  # Inverse to channel quality
+            )
+        
         # Update client selection status
         for client_id in selected:
             self.clients[client_id].last_selected_round = self.round_idx
@@ -140,9 +148,9 @@ class SAFAServer:
         for client_id in undrafted:
             self.clients[client_id].mark_round_missed()
         
-        logger.info(f"CFCFM selection complete | "
-                   f"Selected: {len(selected)} | "
-                   f"Undrafted: {len(undrafted)}")
+        # logger.info(f"CFCFM selection complete | "
+        #            f"Selected: {len(selected)} | "
+        #            f"Undrafted: {len(undrafted)}")
         
         return selected, undrafted
 
@@ -196,13 +204,13 @@ class SAFAServer:
                 # Keep selected client's model in cache
                 self.cache[client_id] = current_global_flat + self.clients[client_id].last_update
         
-        logger.info(f"Aggregation complete | Global v{self.global_version}")
+        # logger.info(f"Aggregation complete | Global v{self.global_version}")
 
     def run_round(self, test_loader: Optional[torch.utils.data.DataLoader] = None) -> float:
         """Execute a complete SAFA round"""
         round_start = time.time()
         self.round_idx += 1
-        logger.info(f"\n=== SAFA Round {self.round_idx} (Global v{self.global_version}) ===")
+        # logger.info(f"\n=== SAFA Round {self.round_idx} (Global v{self.global_version}) ===")
         
         # 1. Classify clients and distribute models
         up_to_date, tolerable, deprecated = self.classify_clients()
@@ -214,6 +222,7 @@ class SAFAServer:
         
         for client in list(self.clients.values()):
             client.reset_for_round()
+            client.set_channel_gain()
             
             # Perform local training
             update, comp_time, success = client.compute_update(self.global_version)
@@ -221,7 +230,7 @@ class SAFAServer:
                 continue  # Skip crashed clients
                 
             # Simulate transmission and get arrival time
-            tx_time, tx_success = client.transmit_update()
+            tx_time, tx_success = client.transmit_update(h_k=client.h_t_k)
             if not tx_success:
                 continue
                 
@@ -269,16 +278,21 @@ class SAFAServer:
         if test_loader is not None:
             acc = self.evaluate(test_loader)
             self.accuracy_history.append(acc)
-            logger.info(f"Test accuracy: {acc:.2f}%")
+            # logger.info(f"Test accuracy: {acc:.2f}%")
+            return acc, time.time() - round_start  # Return actual duration
+        
+        # if test_loader is not None:
+        #     acc = self.evaluate(test_loader)
+        #     self.accuracy_history.append(acc)
         
         # 8. Final logging
         round_duration = time.time() - round_start
         self.round_times.append(round_duration)
         
-        logger.info(f"Round {self.round_idx} completed | "
-                   f"Duration: {round_duration:.2f}s | "
-                   f"Selected: {len(selected_ids)} | "
-                   f"Avg staleness: {avg_staleness:.2f}")
+        # logger.info(f"Round {self.round_idx} completed | "
+        #            f"Duration: {round_duration:.2f}s | "
+        #            f"Selected: {len(selected_ids)} | "
+        #            f"Avg staleness: {avg_staleness:.2f}")
         
         return round_duration
 

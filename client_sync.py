@@ -80,7 +80,7 @@ class SyncClient:
         h_sq = abs(self.channel_gain) ** 2
         comp_energy = self.en * batch_size
         comm_energy = (sigma_t ** 2) / h_sq * (self.last_gradient_norm ** 2)
-        return comp_energy + comm_energy
+        return comm_energy #+ comp_energy
     
     def actual_energy(self, sigma_t, batch_size, actual_grad_norm):
         if self.channel_gain is None:
@@ -89,7 +89,7 @@ class SyncClient:
         h_sq = abs(self.channel_gain) ** 2
         comp_energy = self.en * batch_size
         comm_energy = (sigma_t ** 2) / h_sq * (actual_grad_norm ** 2)
-        return comp_energy + comm_energy
+        return comm_energy #+ comp_energy
     
     def _model_dimension(self):
         return sum(p.numel() for p in self.model.parameters())

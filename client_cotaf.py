@@ -181,7 +181,7 @@ class COTAFClient:
         # PAPER FORMULA: E_comm = (p_k^2 * ||g_k||^2) / |h_k|^2
         comm_energy = (p_k ** 2) * (true_grad_norm ** 2) / (h_mag ** 2)
         
-        total_energy = self.comp_energy + comm_energy
+        total_energy = comm_energy #+ self.comp_energy
         
         logging.info(f"Client {self.client_id}: Energy | "
                     f"Comp: {self.comp_energy:.2f}J | "

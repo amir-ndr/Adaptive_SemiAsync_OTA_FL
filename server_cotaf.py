@@ -35,7 +35,10 @@ class COTAFServer:
         """Get channel coefficient for client (1.0 if no fading)"""
         if self.fading_coefficients and client_idx < len(self.fading_coefficients):
             return self.fading_coefficients[client_idx]
-        return 1.0 + 0j  # Default channel gain = 1
+        return 1.2 + 0j  # Default channel gain = 1
+        # magnitude = np.random.rayleigh(scale=1/np.sqrt(2))
+        # phase = np.random.uniform(0, 2*np.pi)
+        # return magnitude * np.exp(1j * phase)
 
         
     def broadcast_model(self):

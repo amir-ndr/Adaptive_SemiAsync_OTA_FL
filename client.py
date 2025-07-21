@@ -29,9 +29,10 @@ class Client:
         self.dt_k = self._full_computation_time()
         self.tau_k = 0
         self.last_gradient = None
-        self.gradient_norm = 1.0
+        self.gradient_norm = 0.0
         self.h_t_k = None
         self.actual_comp_time = 0.0
+        self.energy_this_round= 0.0
         self.ready = (self.dt_k <= 0)
 
         logger.info(f"Client {client_id} initialized | "

@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from client import Client
 from server import Server
 from model import CNNMnist
-from dataloader import load_mnist, partition_mnist_noniid
+from dataloader import load_mnist, partition_mnist_noniid, partition_mnist_dirichlet
 import matplotlib.pyplot as plt
 import logging
 import collections
@@ -84,10 +84,10 @@ def main():
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=14.0,               # Lyapunov parameter
+        V=150.0,               # Lyapunov parameter
         sigma_n=0.04,          # Noise std
         tau_cm=0.01,           # Comm latency
-        T_max=500,             # Time budget (s)
+        T_max=50,             # Time budget (s)
         E_max=E_max_dict,      # Energy budget
         T_total_rounds=NUM_ROUNDS,
         device=DEVICE
@@ -223,12 +223,16 @@ def main():
     plt.ylabel("Queue Value")
     plt.grid(True)
 
-    # Round durations
+    # NEW: Per-client cumulative energy consumption
     plt.subplot(324)
-    plt.plot(round_durations)
-    plt.title("Round Duration")
+    for cid in range(NUM_CLIENTS):
+        client_energy = [server.per_round_energy[r].get(cid, 0) for r in range(len(server.per_round_energy))]
+        cumulative_energy = np.cumsum(client_energy)
+        plt.plot(cumulative_energy, label=f'Client {cid}')
+    plt.title("Cumulative Energy per Client")
     plt.xlabel("Rounds")
-    plt.ylabel("Time (s)")
+    plt.ylabel("Energy (J)")
+    plt.legend(fontsize=7, loc='upper left', ncol=2)
     plt.grid(True)
 
     # Average staleness
@@ -251,6 +255,16 @@ def main():
     plt.tight_layout(pad=3.0)
     plt.savefig("semi_async_ota_fl_results.png", dpi=300)
     plt.show()
+
+    # NEW: Print energy consumption statistics
+    print("\nEnergy Consumption Statistics:")
+    total_energy = 0
+    for cid in range(NUM_CLIENTS):
+        client_energy = sum(server.per_round_energy[r].get(cid, 0) for r in range(len(server.per_round_energy)))
+        total_energy += client_energy
+        print(f"Client {cid}: {client_energy:.4f} J")
+    print(f"Total system energy: {total_energy:.4f} J")
+    print(f"Average per-client energy: {total_energy/NUM_CLIENTS:.4f} J")
 
 if __name__ == "__main__":
     main()

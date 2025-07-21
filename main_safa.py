@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from safa_client import SAFAClient
 from safa_server import SAFAServer
 from model import CNNMnist
-from dataloader import load_mnist, partition_mnist_noniid
+from dataloader import load_mnist, partition_mnist_both
 import matplotlib.pyplot as plt
 import logging
 from collections import defaultdict
@@ -21,7 +21,7 @@ def main():
         ]
     )
     logger = logging.getLogger(__name__)
-    logger.info("Starting SAFA Federated Learning Simulation")
+    # logger.info("Starting SAFA Federated Learning Simulation")
 
     # ========== Experiment Configuration ==========
     NUM_CLIENTS = 10
@@ -34,21 +34,21 @@ def main():
     SELECT_FRAC = 0.5
     EVAL_INTERVAL = 5
     
-    logger.info(f"\n=== Configuration ==="
-                f"\nClients: {NUM_CLIENTS}"
-                f"\nRounds: {NUM_ROUNDS}"
-                f"\nBatch Size: {BATCH_SIZE}"
-                f"\nLocal Epochs: {LOCAL_EPOCHS}"
-                f"\nDevice: {DEVICE}"
-                f"\nCrash Probability: {CRASH_PROB:.0%}"
-                f"\nStaleness Tolerance: {LAG_TOLERANCE}"
-                f"\nSelection Fraction: {SELECT_FRAC:.0%}"
-                f"\nEvaluation Interval: {EVAL_INTERVAL} rounds")
+    # logger.info(f"\n=== Configuration ==="
+    #             f"\nClients: {NUM_CLIENTS}"
+    #             f"\nRounds: {NUM_ROUNDS}"
+    #             f"\nBatch Size: {BATCH_SIZE}"
+    #             f"\nLocal Epochs: {LOCAL_EPOCHS}"
+    #             f"\nDevice: {DEVICE}"
+    #             f"\nCrash Probability: {CRASH_PROB:.0%}"
+    #             f"\nStaleness Tolerance: {LAG_TOLERANCE}"
+    #             f"\nSelection Fraction: {SELECT_FRAC:.0%}"
+    #             f"\nEvaluation Interval: {EVAL_INTERVAL} rounds")
 
     # ========== Data Preparation ==========
     train_dataset, test_dataset = load_mnist()
     test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
-    client_data_map = partition_mnist_noniid(train_dataset, NUM_CLIENTS)
+    client_data_map = partition_mnist_both(train_dataset, NUM_CLIENTS)
 
     # ========== Client Initialization ==========
     clients = []
@@ -78,10 +78,10 @@ def main():
                 crash_prob=crash_prob
             )
         )
-        logger.info(f"Client {cid} initialized | "
-                   f"Samples: {len(indices)} | "
-                   f"CPU: {cpu_freq/1e9:.2f}GHz | "
-                   f"Crash Prob: {crash_prob:.1%}")
+        # logger.info(f"Client {cid} initialized | "
+        #            f"Samples: {len(indices)} | "
+        #            f"CPU: {cpu_freq/1e9:.2f}GHz | "
+        #            f"Crash Prob: {crash_prob:.1%}")
 
     # ========== Server Initialization ==========
     global_model = CNNMnist().to(DEVICE)
@@ -109,10 +109,10 @@ def main():
     }
 
     # ========== Training Loop ==========
-    logger.info("\n=== Starting Training ===")
+    # logger.info("\n=== Starting Training ===")
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
-        logger.info(f"\n--- Round {round_idx+1}/{NUM_ROUNDS} ---")
+        # logger.info(f"\n--- Round {round_idx+1}/{NUM_ROUNDS} ---")
         
         # Run federated round
         eval_this_round = (round_idx % EVAL_INTERVAL == 0) or (round_idx == NUM_ROUNDS - 1)
@@ -124,16 +124,16 @@ def main():
         metrics['round_durations'].append(round_duration)
         
         # Energy metrics - FIXED indexing
-        if server.energy_history and round_idx < len(server.energy_history):
+        if round_idx < len(server.energy_history):
             round_energy = server.energy_history[round_idx]
             total_energy = sum(e['total'] for e in round_energy) if round_energy else 0
             comm_energy = sum(e['communication'] for e in round_energy) if round_energy else 0
-            
-            metrics['energy_consumption'].append(total_energy)
-            metrics['comm_ratio'].append(comm_energy / total_energy if total_energy > 0 else 0)
         else:
-            metrics['energy_consumption'].append(0)
-            metrics['comm_ratio'].append(0)
+            total_energy = 0
+            comm_energy = 0
+
+        metrics['energy_consumption'].append(total_energy)
+        metrics['comm_ratio'].append(comm_energy / total_energy if total_energy > 0 else 0)
             
         # Client status metrics - FIXED
         metrics['crashed_counts'].append(
@@ -152,12 +152,13 @@ def main():
             metrics['selected_counts'].append(0)
         
         # Effective updates - FIXED
-        metrics['effective_updates'].append(
-            len(server.energy_history[round_idx]) if server.energy_history and round_idx < len(server.energy_history) else 0
-        )
-        
+        if round_idx < len(server.energy_history):
+            metrics['effective_updates'].append(len(server.energy_history[round_idx]))
+        else:
+            metrics['effective_updates'].append(0)
+                
         # Staleness - FIXED indexing
-        if server.staleness_history and round_idx < len(server.staleness_history):
+        if round_idx < len(server.staleness_history):
             metrics['staleness'].append(server.staleness_history[round_idx])
         else:
             metrics['staleness'].append(0)
@@ -167,26 +168,26 @@ def main():
             metrics['accuracies'].append(server.accuracy_history[-1])
 
         # Periodic logging
-        if (round_idx + 1) % 10 == 0 or round_idx == 0:
-            logger.info(
-                f"Round {round_idx+1:03d}/{NUM_ROUNDS} | "
-                f"Duration: {round_duration:.2f}s | "
-                f"Selected: {metrics['selected_counts'][-1]} | "
-                f"Crashed: {metrics['crashed_counts'][-1]} | "
-                f"Effective: {metrics['effective_updates'][-1]} | "
-                f"Energy: {metrics['energy_consumption'][-1]:.2f}J | "
-                f"Staleness: {metrics['staleness'][-1]:.2f}"
-            )
+        # if (round_idx + 1) % 10 == 0 or round_idx == 0:
+        #     logger.info(
+        #         f"Round {round_idx+1:03d}/{NUM_ROUNDS} | "
+        #         f"Duration: {round_duration:.2f}s | "
+        #         f"Selected: {metrics['selected_counts'][-1]} | "
+        #         f"Crashed: {metrics['crashed_counts'][-1]} | "
+        #         f"Effective: {metrics['effective_updates'][-1]} | "
+        #         f"Energy: {metrics['energy_consumption'][-1]:.2f}J | "
+        #         f"Staleness: {metrics['staleness'][-1]:.2f}"
+        #     )
 
     # ========== Final Evaluation ==========
     final_acc = server.evaluate(test_loader)
     metrics['accuracies'].append(final_acc)
     
-    logger.info(f"\n=== Training Complete ==="
-                f"\nFinal Accuracy: {final_acc:.2f}%"
-                f"\nTotal Energy: {sum(metrics['energy_consumption']):.2f}J"
-                f"\nAvg Round Time: {np.mean(metrics['round_durations']):.2f}s"
-                f"\nAvg Staleness: {np.mean(metrics['staleness']):.2f}")
+    # logger.info(f"\n=== Training Complete ==="
+    #             f"\nFinal Accuracy: {final_acc:.2f}%"
+    #             f"\nTotal Energy: {sum(metrics['energy_consumption']):.2f}J"
+    #             f"\nAvg Round Time: {np.mean(metrics['round_durations']):.2f}s"
+    #             f"\nAvg Staleness: {np.mean(metrics['staleness']):.2f}")
 
     # ========== Enhanced Visualization ==========
     plt.figure(figsize=(18, 15))
@@ -258,6 +259,16 @@ def main():
     plt.ylabel("Comm/Total Energy Ratio")
     plt.grid(True)
     plt.savefig("safa_energy_breakdown.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+    plt.figure(figsize=(10, 6))
+    cumulative_energy = np.cumsum(metrics['energy_consumption'])
+    plt.plot(metrics['rounds'], cumulative_energy)
+    plt.title("Cumulative Energy Consumption")
+    plt.xlabel("Rounds")
+    plt.ylabel("Total Energy (Joules)")
+    plt.grid(True)
+    plt.savefig("safa_cumulative_energy.png", dpi=300)
     plt.close()
 
     # Client Statistics

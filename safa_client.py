@@ -39,6 +39,7 @@ class SAFAClient:
         self.local_model = copy.deepcopy(model).to(device)
         self.device = device
         self.local_epochs = local_epochs
+        self.h_t_k = None
         
         # Hardware parameters
         self.fk = float(fk)
@@ -49,7 +50,7 @@ class SAFAClient:
         # Communication parameters
         self.P_max = float(P_max)
         self.bandwidth = 20e6  # 20 Mbps
-        self.tx_power = min(0.2, self.P_max)  # Realistic mobile power
+        self.tx_power = np.random.uniform(0.05, self.P_max)  # Start with random power
         
         # Training data
         self.train_dataset = train_dataset
@@ -74,10 +75,10 @@ class SAFAClient:
         self.computation_energy = 0.0
         self.communication_energy = 0.0
         
-        logger.info(f"SAFA Client {client_id} initialized | "
-                   f"CPU: {fk/1e9:.2f}GHz | "
-                   f"Crash: {crash_prob:.1%} | "
-                   f"Data: {len(data_indices)} samples")
+        # logger.info(f"SAFA Client {client_id} initialized | "
+        #            f"CPU: {fk/1e9:.2f}GHz | "
+        #            f"Crash: {crash_prob:.1%} | "
+        #            f"Data: {len(data_indices)} samples")
 
     def update_model(self, model_state_dict: dict, new_version: int) -> None:
         """Synchronize client model with server version"""
@@ -157,52 +158,60 @@ class SAFAClient:
             self.last_comp_time = time.time() - start_time
             
             # Calculate computation energy (FLOP-based)
-            samples_processed = len(self.data_indices) * self.local_epochs
+            samples_processed = self.Ak * self.local_epochs
             total_flops = samples_processed * self.C
             self.computation_energy = self.mu_k * total_flops * (self.fk**2)
+            # self.total_energy = self.computation_energy
             
             # Increment local version after successful training
             self.version += 1
             
-            logger.info(f"Client {self.client_id} update ready | "
-                       f"Norm: {self.update_norm:.4f} | "
-                       f"Time: {self.last_comp_time:.4f}s | "
-                       f"Energy: {self.computation_energy:.4f}J")
+            # logger.info(f"Client {self.client_id} update ready | "
+            #            f"Norm: {self.update_norm:.4f} | "
+            #            f"Time: {self.last_comp_time:.4f}s | "
+            #            f"Energy: {self.computation_energy:.4f}J")
             
             return self.last_update, self.last_comp_time, True
             
         except RuntimeError as e:
             logger.error(f"Client {self.client_id} failed: {str(e)}")
             self.state = "crashed"
-            return None, 0.0, False
+            return None, time.time() - start_time, False
 
-    def transmit_update(self) -> Tuple[float, bool]:
-        """Transmit model update to server"""
+        # Replace digital model with OTA formula
+    def transmit_update(self, h_k: complex) -> Tuple[float, bool]:
         if self.state == "crashed" or self.last_update is None:
             return 0.0, False
-            
+        
         try:
-            # Transmission failure simulation
             if random.random() < self.crash_prob/2:
                 raise RuntimeError("Transmission failure")
             
-            # Calculate transmission metrics
-            model_size_bits = self.last_update.numel() * 32  # 32 bits per float
-            tx_time = model_size_bits / self.bandwidth
-            self.communication_energy = self.tx_power * tx_time
-            self.total_energy = self.computation_energy + self.communication_energy
+            # ===== OTA ENERGY CALCULATION =====
+            tx_duration = 0.01  # Fixed time for OTA transmission
+            signal_power = (self.tx_power**2) * (self.update_norm**2) / (abs(h_k)**2 + 1e-8) * 3.5
+            self.communication_energy = signal_power
+            print('energhy', self.computation_energy , self.communication_energy)
+            self.total_energy =  self.communication_energy #+ self.computation_energy
+            # ==================================
             
-            logger.debug(f"Client {self.client_id} transmitted | "
-                         f"Size: {model_size_bits/8e3:.2f}KB | "
-                         f"Time: {tx_time:.4f}s | "
-                         f"Power: {self.tx_power:.4f}W")
+            # logger.info(f"OTA transmission | Client {self.client_id} | "
+            #             f"Power: {self.tx_power:.4f}W | "
+            #             f"Grad norm: {self.update_norm:.4f} | "
+            #             f"|h|: {abs(h_k):.4f}")
             
-            return tx_time, True
+            return 0.01, True  # Fixed minimal time for OTA
             
         except RuntimeError as e:
-            logger.error(f"Client {self.client_id} transmission failed: {str(e)}")
+            logger.error(f"Transmission failed: {str(e)}")
             self.state = "crashed"
             return 0.0, False
+        
+    def set_channel_gain(self):
+        magnitude = np.random.rayleigh(scale=1/np.sqrt(2))
+        phase = np.random.uniform(0, 2*np.pi)
+        self.h_t_k = magnitude * np.exp(1j * phase)
+        return self.h_t_k
 
     def cache_update(self, update: torch.Tensor) -> None:
         """Store update in bypass cache"""

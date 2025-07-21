@@ -19,6 +19,7 @@ class Server:
         self.sigma_n = sigma_n
         self.tau_cm = tau_cm
         self.T_max = T_max
+        self.energy_this_round = 0.0
         self.T_total_rounds = T_total_rounds
         self.d = self._get_model_dimension()
 
@@ -69,14 +70,17 @@ class Server:
         for client in self.clients:
             client.set_channel_gain()
             numerator = abs(client.h_t_k)**2
-            denominator = (self.Q_e[client.client_id] + epsilon) * \
-                         (client.gradient_norm**2 + epsilon) * \
-                         (client.dt_k + epsilon)
+            # denominator = (self.Q_e[client.client_id] + epsilon) * \
+            #              (client.gradient_norm**2 + epsilon) * \
+            #              (client.dt_k + epsilon)
+            denominator = np.sqrt(self.Q_e[client.client_id] + epsilon) * \
+              (client.gradient_norm + epsilon) * \
+              (np.log1p(client.dt_k) + epsilon)
             client.score = numerator / denominator
         
         # Log client status
         for client in self.clients:
-            logger.debug(f"Client {client.client_id} status | "
+            logger.info(f"Client {client.client_id} status | "
                          f"Score: {client.score:.4e} | "
                          f"dt_k: {client.dt_k:.4f}s | "
                          f"Q_e: {self.Q_e[client.client_id]:.2f} | "
@@ -170,7 +174,8 @@ class Server:
             energy_cost += self.Q_e[cid] * (E_comp + E_comm)
         
         # Time penalty
-        D_temp = max(c.dt_k for c in candidate_set) + self.tau_cm
+        # D_temp = max(c.dt_k for c in candidate_set) + self.tau_cm
+        D_temp = max(c.actual_comp_time for c in candidate_set)
         
         return conv_penalty + energy_cost + self.Q_time * D_temp
 
@@ -264,9 +269,9 @@ class Server:
             # Compute actual transmission energy
             E_comm = (power_alloc[cid])**2 * client.gradient_norm**2 / (abs(client.h_t_k)**2 + 1e-8)
             # Use actual computation time
-            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak #* (client.actual_comp_time * client.fk / (client.C * client.Ak))
+            E_comp = client.mu_k * client.fk**2 * client.C * client.Ak * (client.actual_comp_time * client.fk / (client.C * client.Ak))
 
-            client_energy = E_comp + E_comm
+            client_energy = E_comm #+ E_comp
             round_energy += client_energy
             self.cumulative_energy_per_client[cid] += client_energy
             round_client_energy[cid] = client_energy
@@ -285,6 +290,7 @@ class Server:
                          f"Q_e: {prev_q:.2f} → {self.Q_e[cid]:.2f}")
 
         self.total_energy_per_round.append(round_energy)
+        self.energy_this_round = round_energy
         self.per_round_energy.append(round_client_energy)
         
         # Update time queue
