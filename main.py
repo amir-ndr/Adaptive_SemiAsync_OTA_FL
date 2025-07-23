@@ -74,7 +74,7 @@ def main():
         print(f"Client {cid}: {len(client_data_map[cid])} samples | "
               f"Comp time: {client.dt_k:.4f}s")
     
-    E_max_dict = {cid: np.random.uniform(25, 38) for cid in range(NUM_CLIENTS)}
+    E_max_dict = {cid: np.random.uniform(1, 2.5) for cid in range(NUM_CLIENTS)}
     print("Client Energy Budgets:")
     for cid, budget in E_max_dict.items():
         print(f"  Client {cid}: {budget:.2f} J")
@@ -84,8 +84,8 @@ def main():
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=150.0,               # Lyapunov parameter
-        sigma_n=0.04,          # Noise std
+        V=1000,               # Lyapunov parameter
+        sigma_n=0.01,          # Noise std
         tau_cm=0.01,           # Comm latency
         T_max=50,             # Time budget (s)
         E_max=E_max_dict,      # Energy budget
