@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from client import Client
 from server import Server
 from model import CNNMnist
-from dataloader import load_mnist, partition_mnist_dirichlet, partition_mnist_noniid
+from dataloader import load_mnist, partition_mnist_noniid, partition_mnist_dirichlet
 import matplotlib.pyplot as plt
 import logging
 
@@ -42,7 +42,7 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
     # Load data
     train_dataset, test_dataset = load_mnist()
     test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
-    client_data_map = partition_mnist_dirichlet(train_dataset, num_clients, alpha=0.2)
+    client_data_map = partition_mnist_dirichlet(train_dataset, num_clients, alpha=2.5)
     
     # Initialize clients
     clients = []
@@ -67,14 +67,14 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
         )
         clients.append(client)
     
-    E_max_dict = {cid: np.random.uniform(25, 38) for cid in range(num_clients)}
+    E_max_dict = {cid: np.random.uniform(0.01, 0.025) for cid in range(num_clients)}
 
     # Initialize server
     global_model = CNNMnist().to(DEVICE)
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=15.0,
+        V=1.0,
         sigma_n=0.05,
         tau_cm=0.01,
         T_max=50,
@@ -91,12 +91,18 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
     selected_counts = []
     client_selection_counts = {cid: 0 for cid in range(num_clients)}
     eval_points = []
+    cumulative_energy = []
+    cumulative_time = []
+
+    total_energy_so_far = 0
+    total_time_so_far = 0
 
     for round_idx in range(num_rounds):
         round_start = time.time()
         
         # 1. Select clients and broadcast model
         selected, power_alloc = server.select_clients()
+        # selected, power_alloc = server.random_selection()
         selected_ids = [c.client_id for c in selected]
         selected_counts.append(len(selected))
         
@@ -119,6 +125,8 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
         # 4. Aggregate updates
         max_comp_time = max(comp_times) if selected else 0
         D_t = max_comp_time + server.tau_cm
+        total_time_so_far += D_t
+        cumulative_time.append(total_time_so_far)
         
         if selected:
             aggregated = server.aggregate(selected, power_alloc)
@@ -140,6 +148,11 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
         avg_staleness_per_round.append(current_avg_staleness)
         round_durations.append(D_t)
         
+        # Calculate total energy for this round
+        round_energy = sum(server.per_round_energy[-1].values()) if server.per_round_energy else 0
+        total_energy_so_far += round_energy
+        cumulative_energy.append(total_energy_so_far)
+        
         # Evaluate periodically
         if (round_idx + 1) % 5 == 0 or round_idx == 0:
             acc = evaluate_model(server.global_model, test_loader, DEVICE)
@@ -160,27 +173,42 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
         client_energy[cid] = energy
         total_energy += energy
     
+    # Get cumulative energy and time at evaluation points
+    cumulative_energy_at_eval = [cumulative_energy[ep] for ep in eval_points if ep < len(cumulative_energy)]
+    cumulative_time_at_eval = [cumulative_time[ep] for ep in eval_points if ep < len(cumulative_time)]
+    
+    # Pad with last value if needed
+    if len(cumulative_energy_at_eval) < len(accuracies):
+        last_energy = cumulative_energy[-1] if cumulative_energy else 0
+        cumulative_energy_at_eval += [last_energy] * (len(accuracies) - len(cumulative_energy_at_eval))
+    
+    if len(cumulative_time_at_eval) < len(accuracies):
+        last_time = cumulative_time[-1] if cumulative_time else 0
+        cumulative_time_at_eval += [last_time] * (len(accuracies) - len(cumulative_time_at_eval))
+    
     # Return all collected results with consistent keys
     return {
         'run_id': run_id,
         'final_accuracy': final_acc,
         'accuracies': accuracies,
         'eval_points': eval_points,
-        'round_duration': round_durations,  # Fixed key name
-        'energy_queue': energy_queues,      # Fixed key name
-        'staleness': avg_staleness_per_round, # Fixed key name
-        'selected_count': selected_counts,   # Fixed key name
+        'round_duration': round_durations,
+        'energy_queue': energy_queues,
+        'staleness': avg_staleness_per_round,
+        'selected_count': selected_counts,
         'client_selection_counts': client_selection_counts,
         'client_energy': client_energy,
         'total_energy': total_energy,
-        'per_round_energy': server.per_round_energy
+        'per_round_energy': server.per_round_energy,
+        'cumulative_energy_at_eval': cumulative_energy_at_eval,
+        'cumulative_time_at_eval': cumulative_time_at_eval
     }
 
 def main():
-    NUM_RUNS = 1
+    NUM_RUNS = 10
     NUM_CLIENTS = 10
     NUM_ROUNDS = 300
-    MIN_ACCURACY = 83.0
+    MIN_ACCURACY = 85.0
     
     successful_runs = []
     run_counter = 0
@@ -211,10 +239,10 @@ def main():
     print(f"\nCollected {len(successful_runs)} successful runs")
     
     # Create directory for results
-    os.makedirs("results_alpha02_main", exist_ok=True)
+    os.makedirs("results100", exist_ok=True)
     
     # Save individual run results
-    with open("results_alpha02_main/individual_runs.csv", "w", newline='') as f:
+    with open("results100/individual_runs.csv", "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['run_id', 'final_accuracy', 'total_energy'] + 
                         [f'client_{i}_energy' for i in range(NUM_CLIENTS)] +
@@ -228,127 +256,104 @@ def main():
                 row.append(run['client_selection_counts'].get(cid, 0))
             writer.writerow(row)
     
-    # Aggregate results
-    aggregated = {
-        'accuracy': np.zeros(61),  # 0,5,10,...,300 (61 evaluation points)
-        'round_duration': np.zeros(NUM_ROUNDS),
-        'energy_queue': np.zeros(NUM_ROUNDS),
-        'selected_count': np.zeros(NUM_ROUNDS),
-        'staleness': np.zeros(NUM_ROUNDS),
-        'client_selection': np.zeros(NUM_CLIENTS),
-        'client_energy': np.zeros(NUM_CLIENTS),
-        'total_energy': 0.0  # This is a scalar, not an array
-    }
+    # ======= NEW: Save accuracy vs energy and time data =======
+    # Save per-run accuracy vs energy/time
+    for run in successful_runs:
+        run_id = run['run_id']
+        with open(f"results100/acc_vs_energy_time_run{run_id}.csv", "w", newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['eval_point', 'accuracy', 'cumulative_energy', 'cumulative_time'])
+            for i, point in enumerate(run['eval_points']):
+                writer.writerow([
+                    point,
+                    run['accuracies'][i],
+                    run['cumulative_energy_at_eval'][i],
+                    run['cumulative_time_at_eval'][i]
+                ])
+    
+    # Save averaged accuracy vs energy/time
+    avg_accuracy = []
+    avg_energy = []
+    avg_time = []
+    
+    # Determine max evaluation points
+    max_eval_points = max(len(run['eval_points']) for run in successful_runs)
+    
+    # Initialize accumulation arrays
+    acc_accum = np.zeros(max_eval_points)
+    energy_accum = np.zeros(max_eval_points)
+    time_accum = np.zeros(max_eval_points)
+    count_accum = np.zeros(max_eval_points)
+    
+    # Accumulate values
+    for run in successful_runs:
+        num_points = len(run['eval_points'])
+        for i in range(num_points):
+            if i < max_eval_points:
+                acc_accum[i] += run['accuracies'][i]
+                energy_accum[i] += run['cumulative_energy_at_eval'][i]
+                time_accum[i] += run['cumulative_time_at_eval'][i]
+                count_accum[i] += 1
     
     # Calculate averages
-    for run in successful_runs:
-        # Accuracy (aligned by evaluation points)
-        for i in range(len(run['accuracies'])):
-            if i < len(aggregated['accuracy']):
-                aggregated['accuracy'][i] += run['accuracies'][i]
-        
-        # Per-round metrics
-        for metric in ['round_duration', 'energy_queue', 'selected_count', 'staleness']:
-            for i in range(NUM_ROUNDS):
-                if i < len(run[metric]):
-                    aggregated[metric][i] += run[metric][i]
-        
-        # Client metrics
-        for cid in range(NUM_CLIENTS):
-            aggregated['client_selection'][cid] += run['client_selection_counts'].get(cid, 0)
-            aggregated['client_energy'][cid] += run['client_energy'].get(cid, 0)
-        
-        aggregated['total_energy'] += run['total_energy']
+    for i in range(max_eval_points):
+        if count_accum[i] > 0:
+            avg_accuracy.append(acc_accum[i] / count_accum[i])
+            avg_energy.append(energy_accum[i] / count_accum[i])
+            avg_time.append(time_accum[i] / count_accum[i])
     
-    # Normalize
-    num_runs = len(successful_runs)
-    for key in aggregated:
-        if key != 'total_energy':
-            aggregated[key] /= num_runs
-    aggregated['total_energy'] /= num_runs
-    
-    # Save averaged results to CSV
-    with open("results_alpha02_main/averaged_results.csv", "w", newline='') as f:
+    # Save averaged data
+    with open("results100/avg_acc_vs_energy_time.csv", "w", newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['metric', 'values'])
-        
-        for metric, values in aggregated.items():
-            if metric == 'total_energy':
-                # Handle scalar value
-                writer.writerow([metric, values])
-            else:
-                # Handle array values
-                writer.writerow([metric] + list(values))
+        writer.writerow(['eval_point', 'accuracy', 'cumulative_energy', 'cumulative_time'])
+        for i in range(len(avg_accuracy)):
+            writer.writerow([
+                i * 5,  # Evaluation point (every 5 rounds)
+                avg_accuracy[i],
+                avg_energy[i],
+                avg_time[i]
+            ])
     
-    # Generate plots
-    plt.figure(figsize=(15, 15))
-    
-    # Accuracy plot
-    plt.subplot(321)
-    eval_rounds = [5*i for i in range(len(aggregated['accuracy']))]
-    plt.plot(eval_rounds, aggregated['accuracy'], 'o-')
-    plt.title("Average Test Accuracy")
-    plt.xlabel("Communication Rounds")
+    # ======= NEW: Create plots =======
+    # Accuracy vs Cumulative Energy
+    plt.figure(figsize=(10, 6))
+    for run in successful_runs:
+        plt.plot(run['cumulative_energy_at_eval'], run['accuracies'], 'o-', alpha=0.3, markersize=3)
+    plt.plot(avg_energy, avg_accuracy, 'r-', linewidth=3, label='Average')
+    plt.xlabel("Cumulative Energy (J)")
     plt.ylabel("Accuracy (%)")
+    plt.title("Accuracy vs. Cumulative Energy Consumption")
     plt.grid(True)
-    plt.ylim(0, 100)
-
-    # Client selection per round
-    plt.subplot(322)
-    plt.plot(aggregated['selected_count'])
-    plt.title("Average Selected Clients per Round")
-    plt.xlabel("Rounds")
-    plt.ylabel("Number of Clients")
-    plt.grid(True)
-
-    # Energy queues
-    plt.subplot(323)
-    plt.plot(aggregated['energy_queue'])
-    plt.title("Average Max Energy Queue Value")
-    plt.xlabel("Rounds")
-    plt.ylabel("Queue Value")
-    plt.grid(True)
-
-    # Round durations
-    plt.subplot(324)
-    plt.plot(aggregated['round_duration'])
-    plt.title("Average Round Duration")
-    plt.xlabel("Rounds")
-    plt.ylabel("Time (s)")
-    plt.grid(True)
-
-    # Average staleness
-    plt.subplot(325)
-    plt.plot(aggregated['staleness'], 'b-')
-    plt.title("Average Client Staleness")
-    plt.xlabel("Rounds")
-    plt.ylabel("Staleness (rounds)")
-    plt.grid(True)
+    plt.legend()
+    plt.savefig("results100/accuracy_vs_energy.png", dpi=300)
+    plt.close()
     
-    # Client energy consumption
-    plt.subplot(326)
-    plt.bar(range(NUM_CLIENTS), aggregated['client_energy'])
-    plt.title("Average Energy Consumption per Client")
-    plt.xlabel("Client ID")
-    plt.ylabel("Energy (J)")
-    plt.xticks(range(NUM_CLIENTS))
+    # Accuracy vs Cumulative Time
+    plt.figure(figsize=(10, 6))
+    for run in successful_runs:
+        plt.plot(run['cumulative_time_at_eval'], run['accuracies'], 'o-', alpha=0.3, markersize=3)
+    plt.plot(avg_time, avg_accuracy, 'r-', linewidth=3, label='Average')
+    plt.xlabel("Cumulative Time (s)")
+    plt.ylabel("Accuracy (%)")
+    plt.title("Accuracy vs. Cumulative Training Time")
     plt.grid(True)
-
-    plt.tight_layout(pad=3.0)
-    plt.savefig("results_alpha02_main/averaged_results.png", dpi=300)
+    plt.legend()
+    plt.savefig("results100/accuracy_vs_time.png", dpi=300)
     plt.close()
     
     # Print summary
     print("\n===== Final Summary =====")
     print(f"Total runs: {len(successful_runs)}")
     print(f"Average final accuracy: {np.mean([r['final_accuracy'] for r in successful_runs]):.2f}%")
-    print(f"Average total energy: {aggregated['total_energy']:.2f} J")
+    print(f"Average total energy: {np.mean([r['total_energy'] for r in successful_runs]):.2f} J")
     
     print("\nPer-client Statistics:")
     for cid in range(NUM_CLIENTS):
+        avg_energy = np.mean([r['client_energy'].get(cid, 0) for r in successful_runs])
+        avg_selections = np.mean([r['client_selection_counts'].get(cid, 0) for r in successful_runs])
         print(f"Client {cid}: "
-              f"Avg Energy = {aggregated['client_energy'][cid]:.2f} J, "
-              f"Avg Selections = {aggregated['client_selection'][cid]:.1f}")
+              f"Avg Energy = {avg_energy:.2f} J, "
+              f"Avg Selections = {avg_selections:.1f}")
 
 if __name__ == "__main__":
     main()

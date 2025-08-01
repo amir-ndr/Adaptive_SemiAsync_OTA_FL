@@ -5,10 +5,10 @@ from torch.utils.data import DataLoader
 from client import Client
 from server import Server
 from model import CNNMnist
-from dataloader import load_mnist, partition_mnist_noniid, partition_mnist_dirichlet
+from dataloader import load_mnist, partition_mnist_noniid
 import matplotlib.pyplot as plt
 import logging
-import collections
+import pandas as pd  # Added for CSV export
 
 def evaluate_model(model, test_loader, device='cpu'):
     model.eval()
@@ -46,7 +46,7 @@ def main():
     # Load data
     train_dataset, test_dataset = load_mnist()
     test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
-    client_data_map = partition_mnist_dirichlet(train_dataset, NUM_CLIENTS, alpha=0.2)
+    client_data_map = partition_mnist_noniid(train_dataset, NUM_CLIENTS)
     
     # Initialize clients
     clients = []
@@ -74,7 +74,7 @@ def main():
         print(f"Client {cid}: {len(client_data_map[cid])} samples | "
               f"Comp time: {client.dt_k:.4f}s")
     
-    E_max_dict = {cid: np.random.uniform(13, 15) for cid in range(NUM_CLIENTS)}
+    E_max_dict = {cid: np.random.uniform(0.01, 0.025) for cid in range(NUM_CLIENTS)}
     print("Client Energy Budgets:")
     for cid, budget in E_max_dict.items():
         print(f"  Client {cid}: {budget:.2f} J")
@@ -84,8 +84,8 @@ def main():
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=1000,               # Lyapunov parameter
-        sigma_n=10e-6,          # Noise std
+        V=10,               # Lyapunov parameter
+        sigma_n=0.5,          # Noise std
         tau_cm=0.01,           # Comm latency
         T_max=50,             # Time budget (s)
         E_max=E_max_dict,      # Energy budget
@@ -100,6 +100,11 @@ def main():
     avg_staleness_per_round = []
     selected_counts = []  # Track number of selected clients per round
     client_selection_counts = {cid: 0 for cid in range(NUM_CLIENTS)}  # Track per-client selection count
+    
+    # Energy tracking variables
+    cumulative_energy = 0.0
+    cumulative_energy_per_round = []
+    energy_breakdown = []  # Store energy consumption per round
 
     for round_idx in range(NUM_ROUNDS):
         round_start = time.time()
@@ -107,7 +112,6 @@ def main():
         
         # 1. Select clients and broadcast current model
         selected, power_alloc = server.select_clients()
-        # selected, power_alloc = server.random_selection()
         selected_ids = [c.client_id for c in selected]
         selected_counts.append(len(selected))
         
@@ -123,16 +127,30 @@ def main():
         
         # 2. Compute gradients on selected clients
         comp_times = []
+        round_energy = 0.0
+        energy_per_client = {}
+        
         for client in selected:
             start_comp = time.time()
             client.compute_gradient()
             comp_time = time.time() - start_comp
             comp_times.append(comp_time)
+            
+            # Calculate energy consumption for this client
+            comp_energy = client.mu_k * (client.fk ** 3) * comp_time
+            comm_energy = power_alloc[client.client_id] * server.tau_cm
+            client_energy = comp_energy + comm_energy
+            round_energy += client_energy
+            
+            # Record per-client energy
+            energy_per_client[client.client_id] = client_energy
+            
             print(f"  Client {client.client_id}: "
                   f"Grad norm={client.gradient_norm:.4f}, "
-                  f"Actual comp={comp_time:.4f}s")
+                  f"Actual comp={comp_time:.4f}s, "
+                  f"Energy={client_energy:.6f}J")
         
-        # 3. Reset staleness AFTER computation (as in your previous version)
+        # 3. Reset staleness AFTER computation
         for client in selected:
             client.reset_staleness()
         
@@ -142,24 +160,36 @@ def main():
         
         if selected:
             aggregated = server.aggregate(selected, power_alloc)
-            server.update_model(aggregated, round_idx)  # Pass round index for LR decay
+            server.update_model(aggregated, round_idx)
         else:
             print("No clients selected - communication only round")
+            round_energy = 0.0
         
-        # 5. Update queues
+        # 5. Update cumulative energy
+        cumulative_energy += round_energy
+        cumulative_energy_per_round.append(cumulative_energy)
+        
+        # Store energy breakdown for this round
+        energy_breakdown.append({
+            'round': round_idx + 1,
+            'round_energy': round_energy,
+            'cumulative_energy': cumulative_energy,
+            **{f'client_{cid}_energy': energy_per_client.get(cid, 0.0) 
+               for cid in range(NUM_CLIENTS)}
+        })
+        
+        # 6. Update queues
         server.update_queues(selected, power_alloc, D_t)
         
-        # 6. Update computation time for ALL clients
+        # 7. Update computation time for ALL clients
         for client in clients:
             if client in selected:
-                # Reset for next round (new model)
                 client.reset_computation()
             else:
-                # Progress computation
                 client.dt_k = max(0, client.dt_k - D_t)
                 client.increment_staleness()
         
-        # 7. Record metrics and evaluate
+        # 8. Record metrics and evaluate
         current_avg_staleness = np.mean([client.tau_k for client in clients])
         avg_staleness_per_round.append(current_avg_staleness)
         round_durations.append(D_t)
@@ -179,7 +209,9 @@ def main():
               f"Wall time: {round_time:.2f}s | "
               f"Max energy queue: {max_energy_q:.2f} | "
               f"Time queue: {server.Q_time:.2f} | "
-              f"Avg staleness: {current_avg_staleness:.2f}")
+              f"Avg staleness: {current_avg_staleness:.2f} | "
+              f"Round energy: {round_energy:.6f}J | "
+              f"Cumulative energy: {cumulative_energy:.6f}J")
 
     # Final evaluation
     final_acc = evaluate_model(server.global_model, test_loader, DEVICE)
@@ -188,83 +220,39 @@ def main():
     print(f"Final accuracy: {final_acc:.2f}%")
     print(f"Average round duration: {np.mean(round_durations):.2f}s")
     print(f"Max energy queue: {max(energy_queues):.2f}")
+    print(f"Total cumulative energy: {cumulative_energy:.6f}J")
     
     # Print client selection statistics
     print("\nClient Selection Statistics:")
     sorted_counts = sorted(client_selection_counts.items(), key=lambda x: x[1], reverse=True)
     for cid, count in sorted_counts:
         print(f"Client {cid}: Selected {count} times ({count/NUM_ROUNDS:.1%} of rounds)")
-
-    # Plot results
-    plt.figure(figsize=(15, 12))
     
-    # Accuracy plot
-    plt.subplot(321)
-    eval_rounds = [5*i for i in range(len(accuracies))]
-    plt.plot(eval_rounds, accuracies, 'o-')
-    plt.title("Test Accuracy")
-    plt.xlabel("Communication Rounds")
-    plt.ylabel("Accuracy (%)")
-    plt.grid(True)
-
-    # Client selection
-    plt.subplot(322)
-    plt.plot(selected_counts)
-    plt.title("Selected Clients per Round")
-    plt.xlabel("Rounds")
-    plt.ylabel("Number of Clients")
-    plt.grid(True)
-
-    # Energy queues
-    plt.subplot(323)
-    plt.plot(energy_queues)
-    plt.title("Max Energy Queue Value")
-    plt.xlabel("Rounds")
-    plt.ylabel("Queue Value")
-    plt.grid(True)
-
-    # NEW: Per-client cumulative energy consumption
-    plt.subplot(324)
-    for cid in range(NUM_CLIENTS):
-        client_energy = [server.per_round_energy[r].get(cid, 0) for r in range(len(server.per_round_energy))]
-        cumulative_energy = np.cumsum(client_energy)
-        plt.plot(cumulative_energy, label=f'Client {cid}')
-    plt.title("Cumulative Energy per Client")
-    plt.xlabel("Rounds")
-    plt.ylabel("Energy (J)")
-    plt.legend(fontsize=7, loc='upper left', ncol=2)
-    plt.grid(True)
-
-    # Average staleness
-    plt.subplot(325)
-    plt.plot(avg_staleness_per_round, 'b-')
-    plt.title("Average Client Staleness")
-    plt.xlabel("Rounds")
-    plt.ylabel("Staleness (rounds)")
-    plt.grid(True)
+    # Save energy data to CSV
+    energy_df = pd.DataFrame(energy_breakdown)
+    energy_df.to_csv('energy_consumption.csv', index=False)
+    print("Saved energy data to 'energy_consumption.csv'")
     
-    # Client selection distribution
-    plt.subplot(326)
-    plt.bar(range(NUM_CLIENTS), [client_selection_counts[cid] for cid in range(NUM_CLIENTS)])
-    plt.title("Client Selection Distribution")
-    plt.xlabel("Client ID")
-    plt.ylabel("Times Selected")
-    plt.xticks(range(NUM_CLIENTS))
+    # Plot cumulative energy
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, NUM_ROUNDS+1), cumulative_energy_per_round, 'b-', linewidth=2)
+    plt.title('Cumulative Energy Consumption')
+    plt.xlabel('Round')
+    plt.ylabel('Cumulative Energy (Joules)')
     plt.grid(True)
-
-    plt.tight_layout(pad=3.0)
-    plt.savefig("semi_async_ota_fl_results.png", dpi=300)
-    plt.show()
-
-    # NEW: Print energy consumption statistics
-    print("\nEnergy Consumption Statistics:")
-    total_energy = 0
-    for cid in range(NUM_CLIENTS):
-        client_energy = sum(server.per_round_energy[r].get(cid, 0) for r in range(len(server.per_round_energy)))
-        total_energy += client_energy
-        print(f"Client {cid}: {client_energy:.4f} J")
-    print(f"Total system energy: {total_energy:.4f} J")
-    print(f"Average per-client energy: {total_energy/NUM_CLIENTS:.4f} J")
+    plt.savefig('cumulative_energy.png')
+    print("Saved cumulative energy plot to 'cumulative_energy.png'")
+    
+    # Optional: Plot per-round energy too
+    per_round_energy = [e['round_energy'] for e in energy_breakdown]
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, NUM_ROUNDS+1), per_round_energy, 'r-', linewidth=1)
+    plt.title('Per-Round Energy Consumption')
+    plt.xlabel('Round')
+    plt.ylabel('Energy per Round (Joules)')
+    plt.grid(True)
+    plt.savefig('per_round_energy.png')
+    print("Saved per-round energy plot to 'per_round_energy.png'")
 
 if __name__ == "__main__":
     main()

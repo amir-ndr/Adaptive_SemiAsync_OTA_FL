@@ -158,6 +158,10 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32, V=5000
     accuracies.append(final_acc)
     eval_points.append(num_rounds)
     
+    # Skip saving results if final accuracy is below 50%
+    if final_acc < 50:
+        return None
+    
     # Calculate energy consumption
     total_energy = 0
     client_energy = {}
@@ -186,8 +190,8 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32, V=5000
     }
 
 def main():
-    V_VALUES = [0.01, 0.1, 1, 10, 100, 1000, 10000]
-    NUM_RUNS = 5
+    V_VALUES = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    NUM_RUNS = 6
     NUM_CLIENTS = 10
     NUM_ROUNDS = 300
     
@@ -199,17 +203,30 @@ def main():
         v_results = []
         print(f"\n=== Running experiments for V={v} ===")
         
-        for run_id in range(1, NUM_RUNS + 1):
-            print(f"Run {run_id}/{NUM_RUNS} for V={v}")
+        successful_runs = 0
+        run_attempts = 0
+        max_attempts = NUM_RUNS * 2  # Allow some extra attempts to get enough good runs
+        
+        while successful_runs < NUM_RUNS and run_attempts < max_attempts:
+            run_attempts += 1
+            run_id = successful_runs + 1
+            print(f"Run attempt {run_attempts} (target {NUM_RUNS} good runs) for V={v}")
             try:
                 results = run_experiment(run_id, V=v, num_rounds=NUM_ROUNDS)
-                v_results.append(results)
-                print(f"Completed Run {run_id} - Accuracy: {results['final_accuracy']:.2f}%")
+                if results is not None:  # Only count if accuracy >= 50%
+                    v_results.append(results)
+                    successful_runs += 1
+                    print(f"Completed successful Run {successful_runs} - Accuracy: {results['final_accuracy']:.2f}%")
+                else:
+                    print("Run completed but accuracy < 50%, discarding results")
             except Exception as e:
-                print(f"Run {run_id} failed: {str(e)}")
+                print(f"Run attempt {run_attempts} failed: {str(e)}")
         
-        # Save results for this V value
-        save_v_results(v, v_results)
+        # Save results for this V value if we got any successful runs
+        if v_results:
+            save_v_results(v, v_results)
+        else:
+            print(f"Warning: No successful runs (accuracy >= 50%) for V={v}")
 
 def save_v_results(v, results_list):
     """Save results for a specific V value to CSV files"""
@@ -281,13 +298,16 @@ def save_v_results(v, results_list):
 
 def plot_results():
     """Plot results for all V values with unified scales"""
-    V_VALUES = [0.01, 0.1, 1, 10, 100, 1000, 10000]
+    V_VALUES = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     plt.figure(figsize=(15, 10))
     
     # Plot accuracy progression
     plt.subplot(2, 2, 1)
     for v in V_VALUES:
         v_dir = f"results_v_study2/V_{v}"
+        if not os.path.exists(v_dir):
+            continue
+            
         avg_acc = []
         rounds = []
         
@@ -316,7 +336,7 @@ def plot_results():
         
         plt.plot(rounds, avg_acc, 'o-', label=f'V={v}')
     
-    plt.title("Test Accuracy Progression")
+    plt.title("Test Accuracy Progression (Only runs with final accuracy >= 50%)")
     plt.xlabel("Communication Rounds")
     plt.ylabel("Accuracy (%)")
     plt.legend()
@@ -326,6 +346,9 @@ def plot_results():
     plt.subplot(2, 2, 2)
     for v in V_VALUES:
         v_dir = f"results_v_study2/V_{v}"
+        if not os.path.exists(v_dir):
+            continue
+            
         energy_data = {r: [] for r in range(300)}
         
         with open(f"{v_dir}/round_metrics.csv", "r") as f:
@@ -360,6 +383,9 @@ def plot_results():
     plt.subplot(2, 2, 3)
     for v in V_VALUES:
         v_dir = f"results_v_study2/V_{v}"
+        if not os.path.exists(v_dir):
+            continue
+            
         selection_data = {r: [] for r in range(300)}
         
         with open(f"{v_dir}/round_metrics.csv", "r") as f:
@@ -393,6 +419,9 @@ def plot_results():
     bar_width = 0.15
     for i, v in enumerate(V_VALUES):
         v_dir = f"results_v_study2/V_{v}"
+        if not os.path.exists(v_dir):
+            continue
+            
         fractions = []
         client_ids = []
         

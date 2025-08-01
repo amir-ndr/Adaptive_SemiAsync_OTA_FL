@@ -33,7 +33,7 @@ def run_single_experiment():
     # Load data
     train_dataset, test_dataset = load_mnist()
     test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
-    client_data_map = partition_mnist_dirichlet(train_dataset, num_clients, alpha=100)
+    client_data_map = partition_mnist_dirichlet(train_dataset, num_clients, alpha=0.2)
     
     # Initialize clients with energy parameters
     clients = []

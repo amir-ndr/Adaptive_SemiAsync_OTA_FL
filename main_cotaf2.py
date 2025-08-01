@@ -59,7 +59,7 @@ def run_multiple_experiments(num_runs=10, min_accuracy=75):
         
         # Load and partition data
         train_dataset, test_data = load_mnist()
-        client_data_map = partition_mnist_dirichlet(train_dataset, NUM_CLIENTS, alpha=100)
+        client_data_map = partition_mnist_dirichlet(train_dataset, NUM_CLIENTS, alpha=0.2)
         
         # Precompute FLOPs for CNNMnist model
         C = calculate_cnnmnist_flops()
@@ -253,7 +253,7 @@ def plot_individual_results(successful_runs):
 
 if __name__ == "__main__":
     # Run multiple experiments and aggregate results
-    aggregated, successful_runs = run_multiple_experiments(num_runs=10, min_accuracy=70)
+    aggregated, successful_runs = run_multiple_experiments(num_runs=10, min_accuracy=80)
     
     # Plot results
     plot_aggregated_results(aggregated)

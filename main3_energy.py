@@ -42,7 +42,7 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
     # Load data
     train_dataset, test_dataset = load_mnist()
     test_loader = DataLoader(test_dataset, batch_size=256, shuffle=False)
-    client_data_map = partition_mnist_dirichlet(train_dataset, num_clients, alpha=100)
+    client_data_map = partition_mnist_dirichlet(train_dataset, num_clients, alpha=0.2)
     
     # Initialize clients
     clients = []
@@ -67,15 +67,17 @@ def run_experiment(run_id, num_clients=10, num_rounds=300, batch_size=32):
         )
         clients.append(client)
     
-    E_max_dict = {cid: np.random.uniform(25, 38) for cid in range(num_clients)}
+    # E_max_dict = {cid: np.random.uniform(0.01, 0.025) for cid in range(num_clients)}
+    E_max_dict = {cid: np.random.uniform(13, 15) for cid in range(num_clients)}
+
 
     # Initialize server
     global_model = CNNMnist().to(DEVICE)
     server = Server(
         global_model=global_model,
         clients=clients,
-        V=15.0,
-        sigma_n=0.05,
+        V=1000.0,
+        sigma_n=10e-6,
         tau_cm=0.01,
         T_max=50,
         E_max=E_max_dict,
